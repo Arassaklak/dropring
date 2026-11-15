@@ -1,0 +1,4 @@
+# Link the C runtime statically on Windows so the launcher itself does not need
+# vcruntime140.dll (the Python runtime brings its own copy next to python3XY.dll).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

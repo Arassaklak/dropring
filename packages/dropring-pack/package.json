@@ -1,0 +1,29 @@
+{
+  "name": "dropring-pack",
+  "version": "0.1.0",
+  "description": "Turn a Python script or project into a standalone Windows .exe or macOS .app, from any host, without PyInstaller",
+  "license": "MIT",
+  "private": true,
+  "main": "builder/index.js",
+  "bin": {
+    "dropring-pack": "builder/cli.js"
+  },
+  "files": [
+    "builder/",
+    "boot/",
+    "runtime/",
+    "docs/",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "launcher:build": "cd launcher && cargo build --release --locked"
+  },
+  "dependencies": {
+    "tar": "7.5.22"
+  }
+}

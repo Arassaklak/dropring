@@ -1,0 +1,8 @@
+{
+  "description": "Arguments (spaces, quotes, Unicode, empty) reach the app unchanged; the exit code is propagated",
+  "entry": "main.py",
+  "args": ["7", "a b", "say \"hi\"", "", "çğıöşü"],
+  "exitCode": 7,
+  "stdout": "7 | a b | say \"hi\" |  | çğıöşü",
+  "stderr": "to stderr"
+}

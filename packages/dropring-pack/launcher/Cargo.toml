@@ -1,0 +1,30 @@
+[package]
+name = "dropring-pack-launcher"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Tiny native launcher for applications built with dropring-pack"
+repository = "https://github.com/Arassaklak/dropring"
+publish = false
+# No third-party crates (ADR-0002). Adding one needs an ADR update.
+
+[lib]
+name = "dropring_pack_launcher"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dropring-pack-console"
+path = "src/bin/console.rs"
+
+[[bin]]
+name = "dropring-pack-windowed"
+path = "src/bin/windowed.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+incremental = false

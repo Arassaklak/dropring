@@ -1,0 +1,32 @@
+{
+  "description": "Frozen environment facts; also checks that the user's PYTHON* variables neither break nor influence the app",
+  "entry": "main.py",
+  "args": ["one", "two words", "ünïcödé ✓"],
+  "env": {
+    "PYTHONHOME": "/dropring-pack-test-nonexistent",
+    "PYTHONPATH": "/dropring-pack-test-nonexistent",
+    "PYTHONOPTIMIZE": "2",
+    "PYTHONNOUSERSITE": ""
+  },
+  "exitCode": 0,
+  "stdoutJson": {
+    "message": "hello from dropring-pack",
+    "frozen": true,
+    "helper_is_frozen": true,
+    "argv": ["one", "two words", "ünïcödé ✓"],
+    "argv0_is_executable": true,
+    "prefix_in_bundle": true,
+    "stdlib_in_bundle": true,
+    "utf8_mode": 1,
+    "user_site_disabled": true,
+    "optimize": 0,
+    "dont_write_bytecode": true,
+    "user_pythonpath_restored": "/dropring-pack-test-nonexistent",
+    "user_pythonpath_not_on_sys_path": true,
+    "launcher_vars_gone": true,
+    "sqlite_ok": true,
+    "zlib_ok": true,
+    "sha256_ok": true,
+    "resource_exists": true
+  }
+}

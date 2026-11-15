@@ -1,0 +1,4 @@
+[toolchain]
+# Pinned for reproducible launcher builds (ADR-0002). Rust 1.99.0 was released 2026-10-01.
+channel = "1.99.0"
+profile = "minimal"

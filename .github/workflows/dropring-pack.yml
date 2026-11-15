@@ -1,0 +1,195 @@
+# dropring-pack (packages/dropring-pack): builds the native launcher for every target, packages
+# the test fixtures as real apps and runs them on Windows x64/ARM64 and macOS Apple Silicon/Intel
+# runners — apps built on the runner itself and apps cross-assembled on a Linux runner.
+name: dropring-pack
+
+on:
+  push:
+    branches: [main, 'dropring-pack/**']
+    paths: ['packages/dropring-pack/**', '.github/workflows/dropring-pack.yml']
+  pull_request:
+    paths: ['packages/dropring-pack/**', '.github/workflows/dropring-pack.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dropring-pack-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: '1.99.0'
+  NODE_VERSION: '22'
+
+jobs:
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/dropring-pack
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - run: npm ci
+      - run: npm test
+
+  launcher:
+    name: launcher ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: win-x64, os: windows-latest, triple: x86_64-pc-windows-msvc, ext: .exe }
+          - { target: win-arm64, os: windows-11-arm, triple: aarch64-pc-windows-msvc, ext: .exe }
+          - { target: mac-arm64, os: macos-15, triple: aarch64-apple-darwin, macos: '11.0' }
+          - { target: mac-x64, os: macos-15-intel, triple: x86_64-apple-darwin, macos: '10.13' }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/dropring-pack/launcher
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            # Some images (e.g. windows-11-arm) may not ship rustup: install it, hash-checked.
+            case "$RUNNER_OS-$RUNNER_ARCH" in
+              Windows-ARM64) host=aarch64-pc-windows-msvc; exe=rustup-init.exe ;;
+              Windows-X64) host=x86_64-pc-windows-msvc; exe=rustup-init.exe ;;
+              macOS-ARM64) host=aarch64-apple-darwin; exe=rustup-init ;;
+              macOS-X64) host=x86_64-apple-darwin; exe=rustup-init ;;
+              *) host=x86_64-unknown-linux-gnu; exe=rustup-init ;;
+            esac
+            base="https://static.rust-lang.org/rustup/dist/$host"
+            curl -sSfL -o "$RUNNER_TEMP/$exe" "$base/$exe"
+            expected=$(curl -sSfL "$base/$exe.sha256" | cut -d' ' -f1)
+            actual=$(node -e "process.stdout.write(require('crypto').createHash('sha256').update(require('fs').readFileSync(process.argv[1])).digest('hex'))" "$RUNNER_TEMP/$exe")
+            [ "$expected" = "$actual" ] || { echo "rustup-init hash mismatch"; exit 1; }
+            chmod +x "$RUNNER_TEMP/$exe"
+            "$RUNNER_TEMP/$exe" -y --no-modify-path --profile minimal --default-toolchain none
+            if [ "$RUNNER_OS" = Windows ]; then echo "$USERPROFILE\\.cargo\\bin" >> "$GITHUB_PATH"; export PATH="$(cygpath "$USERPROFILE")/.cargo/bin:$PATH"; else echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"; export PATH="$HOME/.cargo/bin:$PATH"; fi
+          fi
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target "${{ matrix.triple }}"
+          rustc --version
+      - name: Unit tests
+        run: cargo test --release --locked --target ${{ matrix.triple }}
+      - name: Build launchers
+        run: |
+          cargo build --release --locked --target ${{ matrix.triple }}
+          out="../dist-launchers/${{ matrix.target }}"
+          mkdir -p "$out"
+          for kind in console windowed; do cp "target/${{ matrix.triple }}/release/dropring-pack-$kind${{ matrix.ext }}" "$out/"; done
+          node -e "
+            const fs = require('fs'), crypto = require('crypto'), path = require('path');
+            const dir = process.argv[1];
+            const files = fs.readdirSync(dir).filter((f) => f.startsWith('dropring-pack-')).sort();
+            const meta = { version: /^version\s*=\s*\"([^\"]+)\"/m.exec(fs.readFileSync('Cargo.toml', 'utf8'))[1], target: '${{ matrix.target }}', rustc: process.argv[2], commit: process.env.GITHUB_SHA, files: {} };
+            for (const f of files) meta.files[f] = { size: fs.statSync(path.join(dir, f)).size, sha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, f))).digest('hex') };
+            fs.writeFileSync(path.join(dir, 'launcher.json'), JSON.stringify(meta, null, 2) + '\n');
+            console.log(JSON.stringify(meta, null, 2));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### launcher ' + meta.target + '\n\n' + files.map((f) => '- ' + f + ': ' + meta.files[f].size + ' bytes, sha256 ' + meta.files[f].sha256).join('\n') + '\n');
+          " "$out" "$(rustc --version)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: launcher-${{ matrix.target }}
+          path: packages/dropring-pack/dist-launchers/${{ matrix.target }}
+          if-no-files-found: error
+
+  native:
+    name: native ${{ matrix.target }} py${{ matrix.python }}
+    needs: launcher
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: win-x64, os: windows-latest, python: '3.14' }
+          - { target: win-x64, os: windows-latest, python: '3.10' }
+          - { target: win-x64, os: windows-latest, python: '3.15' }
+          - { target: win-arm64, os: windows-11-arm, python: '3.14' }
+          - { target: mac-arm64, os: macos-15, python: '3.14' }
+          - { target: mac-arm64, os: macos-15, python: '3.10' }
+          - { target: mac-arm64, os: macos-15, python: '3.15' }
+          - { target: mac-x64, os: macos-15-intel, python: '3.14' }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/dropring-pack
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: launcher-${{ matrix.target }}
+          path: packages/dropring-pack/dist-launchers/${{ matrix.target }}
+      - name: Build and run fixtures
+        run: node tests/ci.js native --target ${{ matrix.target }} --python ${{ matrix.python }} --launcher-dir dist-launchers --out out
+
+  cross-build:
+    name: cross-build on Linux
+    needs: launcher
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/dropring-pack
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: launcher-*
+          path: packages/dropring-pack/dist-launchers
+      - name: Arrange launchers by target
+        run: for d in dist-launchers/launcher-*; do mv "$d" "dist-launchers/${d#dist-launchers/launcher-}"; done && ls -R dist-launchers
+      - name: Build fixtures for all targets
+        run: node tests/ci.js cross-build --targets win-x64,win-arm64,mac-arm64,mac-x64 --launcher-dir dist-launchers --out cross
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cross-apps
+          path: packages/dropring-pack/cross/*.tar
+          if-no-files-found: error
+
+  cross-run:
+    name: run Linux-built ${{ matrix.target }}
+    needs: cross-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: win-x64, os: windows-latest }
+          - { target: win-arm64, os: windows-11-arm }
+          - { target: mac-arm64, os: macos-15 }
+          - { target: mac-x64, os: macos-15-intel }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/dropring-pack
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: cross-apps
+          path: packages/dropring-pack/cross
+      - name: Run fixtures
+        run: |
+          mkdir -p "apps/${{ matrix.target }}"
+          tar -xf "cross/${{ matrix.target }}.tar" -C "apps/${{ matrix.target }}"
+          node tests/ci.js run --target ${{ matrix.target }} --apps "apps/${{ matrix.target }}"

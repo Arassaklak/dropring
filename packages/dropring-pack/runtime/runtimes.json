@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "source": "python-build-standalone",
+  "repository": "https://github.com/astral-sh/python-build-standalone",
+  "flavor": "install_only_stripped",
+  "urlTemplate": "https://github.com/astral-sh/python-build-standalone/releases/download/{release}/cpython-{version}%2B{release}-{triple}-{flavor}.tar.gz",
+  "default": "3.14",
+  "runtimes": {
+    "3.10": {
+      "version": "3.10.22",
+      "release": "20261009",
+      "assets": {
+        "x86_64-pc-windows-msvc": "f20288c45ff11e7fe026f40ddcfb2acfe695cec18860746639e289142a589745",
+        "aarch64-apple-darwin": "056952e8ee266df0dc4e595a88a0d691efe0d6af7cd9e772b89e5efd276ead79",
+        "x86_64-apple-darwin": "7c579c3d9913a36b86a63772704cc08960de9b819b8915455218a536dbd4f3f2",
+        "x86_64-unknown-linux-gnu": "caa66b308e10f35b8114054df7d927903f971f631cfa3237b84c40d5d5f35549",
+        "aarch64-unknown-linux-gnu": "ecbe978a7ecbeb3a9aed67bb5d161180701513b4fa8101037b2a3f1ac11e96be"
+      },
+      "endOfLife": true
+    },
+    "3.11": {
+      "version": "3.11.18",
+      "release": "20261110",
+      "assets": {
+        "x86_64-pc-windows-msvc": "f31751f4a8483f5ac7cd77ad83f8dfb80d9f2a7245bff1585e27516c777fb46f",
+        "aarch64-pc-windows-msvc": "6dbfec8ee90da5478132525cca8a78019c4e28774be71274ea4c74a0afcf6ec1",
+        "aarch64-apple-darwin": "3afb0567b2a2b30b3a7341bd143cb4e8a69f3d8e95d4641218eaa45f0fabbd07",
+        "x86_64-apple-darwin": "c2e4b51e535ead2e526b8974909a1b1e00fbc2ebe2281087b9b8b14dad0cad5d",
+        "x86_64-unknown-linux-gnu": "3288c54cea3db350052019b3f8b558dd8a3da8afa6fda573f5fd2bcb37635b4a",
+        "aarch64-unknown-linux-gnu": "7e71f26a003949b57757e287f4f4b6689da07e7a229f5bbee7919c19ed77155d"
+      }
+    },
+    "3.12": {
+      "version": "3.12.16",
+      "release": "20261110",
+      "assets": {
+        "x86_64-pc-windows-msvc": "355ee61b8207b91574491b1c6dc9b0ebb4408fc56bfafe498f3ef439314b52dc",
+        "aarch64-pc-windows-msvc": "c1b334c7b1db8f962b37a333d8362cab0ba7ebda1a7cce917fae56a1e0c8cbe7",
+        "aarch64-apple-darwin": "2f11b8aa3726bdbd87dd9eb76568412faddf4f47e26913fa45d6a2e424972acd",
+        "x86_64-apple-darwin": "b78a4c479f1964ec484880bee567568266f68da102269fb93a05fe8716b45f91",
+        "x86_64-unknown-linux-gnu": "6a9e62dad033790aef722dbd370e0ce76ce17b73627ba3ae679f537049350b39",
+        "aarch64-unknown-linux-gnu": "b6a41defec4975d94b4ff1950236e7383e5c02ba40ea48c9ec33c66087a35aab"
+      }
+    },
+    "3.13": {
+      "version": "3.13.18",
+      "release": "20261110",
+      "assets": {
+        "x86_64-pc-windows-msvc": "2e0fed09d48989f64c9305da9ff2d37a41c0d13ab2aa6283405b2b620dfbf805",
+        "aarch64-pc-windows-msvc": "0a8840071810ddb8565256cd406b466d4e9dc6dc523395a5477880dbc4f67eb3",
+        "aarch64-apple-darwin": "7a2384641584ab9984221fcb0fc9265df465922af71be71410529e2a9c3f0540",
+        "x86_64-apple-darwin": "d27d59a722db9f69926eb6d9564071247221f45a04da920ea7f3001c97e32f9b",
+        "x86_64-unknown-linux-gnu": "f2d2199eb25880e07863b391cf7124e7ffa1338b0d65600dfcec117c4223a7fb",
+        "aarch64-unknown-linux-gnu": "55c00325f7c1fddf325dfc621aabdfbbac4dc54adda224af88ec411dc12db239"
+      }
+    },
+    "3.14": {
+      "version": "3.14.10",
+      "release": "20261110",
+      "assets": {
+        "x86_64-pc-windows-msvc": "32b6cf90a03e2bc15fda8d2ab7ff78c4870f138887d612932650ce764efaab8f",
+        "aarch64-pc-windows-msvc": "0fc229d477a86e9797d4732b03a5bbc02c503cb81515c986b723038a12c520df",
+        "aarch64-apple-darwin": "f15ec3d15460dd66c2eb88639b152cd9040e7d1ece11e38bf89e8f53f0171e02",
+        "x86_64-apple-darwin": "85f8e54798e8e6aa58d2253f013d815c5616343cc0d15cbea882fca78bdfeae2",
+        "x86_64-unknown-linux-gnu": "c2ff2e97422f5d3896a16e0317fd212ba977bbf2688d93a6f7a03d817506bd30",
+        "aarch64-unknown-linux-gnu": "38fd50f07170adc29d481913d1c30b17ecb538fbe290315fe1f83d84fdd5b694"
+      }
+    },
+    "3.15": {
+      "version": "3.15.2",
+      "release": "20261110",
+      "assets": {
+        "x86_64-pc-windows-msvc": "ecd90d78accb906e3d47f6cdb409a610da10475f94d15ebdd8cb2e0561b71df6",
+        "aarch64-pc-windows-msvc": "f53641fd0bc1d0b0946069647a5c2c44b5acb33aed53be2855e9a674b8585b20",
+        "aarch64-apple-darwin": "7e58607647b5b4832092a339ff1c55eeeccee128221232509b8fc8d27957065e",
+        "x86_64-apple-darwin": "11143c2a2556b14619e8241d3f74bb43ad97181c0eb4909bab87d7aad1154e49",
+        "x86_64-unknown-linux-gnu": "ad23d1b73fac26440b0306ae06911031344c49a90ec19716c8362e7fa40cae43",
+        "aarch64-unknown-linux-gnu": "d1367a6c3cd86a9e35712072841f1376859f3b47a2a54e224421a0f9fd169047"
+      }
+    }
+  }
+}
