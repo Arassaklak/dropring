@@ -139,9 +139,10 @@ function cmdInspect(opts) {
   if (opts.json) return console.log(JSON.stringify(m, null, 2));
   const groups = new Map();
   for (const f of m.files) {
+    // Large files on their own line, everything else by folder (two levels below python/).
     const parts = f.path.split('/');
     const i = parts.indexOf('python');
-    const key = i >= 0 ? parts.slice(0, Math.min(parts.length - 1, i + 2)).join('/') : parts.slice(0, -1).join('/') || '.';
+    const key = f.size >= 1048576 ? f.path : i >= 0 ? parts.slice(0, Math.min(parts.length - 1, i + 3)).join('/') : parts.slice(0, -1).join('/') || '.';
     groups.set(key, (groups.get(key) || 0) + f.size);
   }
   console.log(`${m.app.name} ${m.app.version} (${m.app.appId}) — ${m.target.id}, ${m.app.mode}, ${m.app.subsystem}`);
