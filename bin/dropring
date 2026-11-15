@@ -1,0 +1,6 @@
+#!/bin/sh
+# DropRing komut satırı (macOS). Kurmak için:
+#   sudo ln -sf "/Applications/DropRing.app/Contents/Resources/dropring" /usr/local/bin/dropring
+DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+APP="$DIR/../MacOS/DropRing"
+ELECTRON_RUN_AS_NODE=1 exec "$APP" "$DIR/app.asar/src/cli.js" "$@"
