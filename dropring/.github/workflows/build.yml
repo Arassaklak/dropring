@@ -1,0 +1,84 @@
+# Windows ve macOS (Intel + Apple Silicon) kurulum dosyalarını derler.
+# Etiket (v1.0.0 gibi) gönderildiğinde dosyaları bir GitHub sürümüne ekler.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Test dosyaları
+        run: |
+          mkdir -p /tmp/t
+          F=node_modules/ffmpeg-static/ffmpeg
+          $F -y -loglevel error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440 -t 6 -c:v libx264 -c:a aac -shortest /tmp/t/video.mp4
+          $F -y -loglevel error -f lavfi -i mandelbrot=size=3000x2000 -frames:v 1 /tmp/t/foto.png
+          printf '# Merhaba\n\n| a | b |\n|---|---|\n| 1 | 2 |\n' > /tmp/t/not.md
+          echo '[{"ad":"Ayşe","yas":30,"adres":{"il":"İzmir"}}]' > /tmp/t/kisiler.json
+      - run: node test/engine.test.js /tmp/t
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win --x64
+          - os: macos-15          # Apple Silicon
+            args: --mac --arm64
+          - os: macos-15-intel    # Intel
+            args: --mac --x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Derle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # İmzalama için (isteğe bağlı) — gizli değişkenler tanımlıysa kullanılır:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
+        shell: bash
+        run: |
+          EXTRA=""
+          # Sertifika yoksa macOS paketini ad-hoc imzala (Apple Silicon'da açılabilmesi için gerekli)
+          if [[ "$RUNNER_OS" == "macOS" && -z "$CSC_LINK" ]]; then EXTRA="-c.mac.identity=-"; fi
+          npx electron-builder ${{ matrix.args }} --publish never $EXTRA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dropring-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
