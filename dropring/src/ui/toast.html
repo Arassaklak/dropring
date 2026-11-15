@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>DropRing</title>
+<style>
+  :root { --accent: #6c5ce7; --bg: rgba(252,252,255,.98); --fg: #1d1d26; --mut: #6a6a7a; --line: rgba(0,0,0,.08); --ok: #12a37f; --bad: #d64545; }
+  @media (prefers-color-scheme: dark) { :root { --bg: rgba(34,34,44,.98); --fg: #f1f1f6; --mut: #a3a3b6; --line: rgba(255,255,255,.1); } }
+  html, body { margin: 0; background: transparent; font: 13px -apple-system, "Segoe UI", system-ui, sans-serif; color: var(--fg); overflow: hidden; }
+  #list { display: flex; flex-direction: column; gap: 8px; padding: 6px 6px 6px 6px; justify-content: flex-end; }
+  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 26px rgba(0,0,0,.18); display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; animation: in .18s ease; }
+  @keyframes in { from { transform: translateY(10px); opacity: 0; } }
+  .ring { width: 40px; height: 40px; }
+  .ring circle { fill: none; stroke-width: 4; }
+  .ring .bg { stroke: var(--line); } .ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .2s; transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .thumb { width: 40px; height: 40px; border-radius: 9px; object-fit: cover; }
+  .icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; color: #fff; background: var(--ok); }
+  .icon.bad { background: var(--bad); }
+  .title { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: var(--mut); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; }
+  button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  button:hover { background: var(--accent); color: #fff; border-color: transparent; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<div id="list"></div>
+<script src="i18n.js"></script>
+<script src="toast.js"></script>
+</body>
+</html>

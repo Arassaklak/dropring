@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>DropRing halka</title>
+<style>
+  :root { --accent: #6c5ce7; --act: #0f9f8f; --rec: #e0901b; --bg: rgba(250,250,253,.97); --fg: #1d1d26; --mut: #6a6a7a; --line: rgba(0,0,0,.08); --hole: #fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg: rgba(32,32,42,.97); --fg: #f1f1f6; --mut: #a3a3b6; --line: rgba(255,255,255,.08); --hole: #262632; } }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; user-select: none; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; cursor: default; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #wrap { opacity: 0; transform-origin: var(--cx) var(--cy); transform: scale(.82); transition: opacity .12s ease, transform .16s cubic-bezier(.2,1.3,.4,1); }
+  #wrap.on { opacity: 1; transform: scale(1); }
+  .slice path { fill: var(--bg); stroke: var(--line); stroke-width: 1; transition: fill .08s; }
+  .slice text { fill: var(--fg); font-size: 13px; font-weight: 600; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .slice text.sub { font-size: 9.5px; font-weight: 500; fill: var(--mut); }
+  .slice.t.hot path { fill: var(--accent); } .slice.a.hot path { fill: var(--act); } .slice.r.hot path { fill: var(--rec); }
+  .slice.hot text { fill: #fff; }
+  .slice.a text.sub { fill: var(--act); } .slice.r text.sub { fill: var(--rec); }
+  .slice.dis path { opacity: .45; }
+  .outer path { fill: var(--bg); stroke: var(--line); }
+  .outer text { font-size: 11.5px; font-weight: 600; fill: var(--fg); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .outer.hot path { fill: var(--accent); } .outer.hot text { fill: #fff; }
+  #hole { fill: var(--hole); stroke: var(--line); }
+  #hole.hot { fill: var(--accent); }
+  .ctext { fill: var(--fg); font-size: 12.5px; font-weight: 650; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .csub { fill: var(--mut); font-size: 10.5px; text-anchor: middle; pointer-events: none; }
+  #hole.hot ~ .ctext, #hole.hot ~ .csub { fill: #fff; }
+  .shadow { filter: drop-shadow(0 10px 28px rgba(0,0,0,.28)); }
+  .page { fill: var(--mut); font-size: 10px; text-anchor: middle; }
+  .dot { fill: var(--line); } .dot.on { fill: var(--accent); }
+</style>
+</head>
+<body>
+<svg id="svg"><g id="wrap"></g></svg>
+<script src="i18n.js"></script>
+<script src="ring.js"></script>
+</body>
+</html>
