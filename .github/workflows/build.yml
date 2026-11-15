@@ -57,9 +57,13 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
         shell: bash
         run: |
+          # Tanımsız sırlar boş metin olarak gelir; electron-builder bunu dosya yolu sanıp hata verir
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
           EXTRA=""
           # Sertifika yoksa macOS paketini ad-hoc imzala (Apple Silicon'da açılabilmesi için gerekli)
-          if [[ "$RUNNER_OS" == "macOS" && -z "$CSC_LINK" ]]; then EXTRA="-c.mac.identity=-"; fi
+          if [[ "$RUNNER_OS" == "macOS" && -z "${CSC_LINK:-}" ]]; then EXTRA="-c.mac.identity=-"; fi
           npx electron-builder ${{ matrix.args }} --publish never $EXTRA
       - uses: actions/upload-artifact@v4
         with:
