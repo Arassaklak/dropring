@@ -70,7 +70,7 @@ async function buildFixtures(targets, { python, launcherDir, out, zip }) {
       rows.push({ fixture, target: String(targets), ok: false, built: false, problems: [`expected the build to fail (/${expectError}/) but it succeeded`] });
       continue;
     }
-    for (const a of result.artifacts) rows.push({ fixture, target: a.target, built: true, path: a.path, zipPath: a.zipPath, sizeMB: +(a.sizeBytes / 1048576).toFixed(1), files: a.fileCount, buildMs: Date.now() - t0 });
+    for (const a of result.artifacts) rows.push({ fixture, target: a.target, ok: true, built: true, path: a.path, zipPath: a.zipPath, sizeMB: +(a.sizeBytes / 1048576).toFixed(1), files: a.fileCount, buildMs: Date.now() - t0 });
   }
   return rows;
 }
@@ -162,7 +162,7 @@ async function main() {
       fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### cross-build on ${process.platform}-${process.arch}\n\n${built.map((b) => (b.built ? `- ${b.target} ${b.fixture}: ${b.sizeMB} MB, ${b.files} files, ${path.basename(b.zipPath)}` : `- ${b.fixture}: ${b.ok ? 'refused as expected' : `**FAILED** ${b.problems.join('; ')}`}`)).join('\n')}\n\n`);
     }
     const failed = built.filter((b) => !b.ok);
-    for (const f of failed) console.log(`FAIL ${f.fixture}: ${f.problems.join('; ')}`);
+    for (const f of failed) console.log(`FAIL ${f.fixture}: ${(f.problems || []).join('; ')}`);
     if (failed.length) process.exitCode = 1;
   } else if (cmd === 'run') {
     const target = arg('target');

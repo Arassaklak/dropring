@@ -153,21 +153,31 @@ class DependencyError extends Error {
  */
 async function resolve({ uv, plan, target, minor, workDir, options, env, signal }) {
   await fs.promises.mkdir(workDir, { recursive: true });
-  const input = path.join(workDir, 'requirements.in');
   const lockFile = path.join(workDir, 'requirements.lock');
-  const lines = [...plan.passthrough.map((f) => `-r ${f}`), ...plan.specs];
-  await fs.promises.writeFile(input, lines.join('\n') + '\n');
+  // Requirements files are passed to uv as arguments, never as "-r <path>" lines: inside a
+  // requirements file a Windows path loses its backslashes ("D:\a\x" became "d:ax", which uv
+  // then took for a URL), and relative includes in the user's file must resolve from its folder.
+  const inputs = [...plan.passthrough];
+  if (plan.specs.length) {
+    const specsFile = path.join(workDir, 'requirements.in');
+    await fs.promises.writeFile(specsFile, plan.specs.join('\n') + '\n');
+    inputs.push(specsFile);
+  }
   const common = [...targetArgs(target, minor), ...indexArgs(options, env), '--no-header', '--no-annotate', '--quiet'];
-  const r = await run(uv, ['pip', 'compile', input, '-o', lockFile, '--generate-hashes', ...common], { env, signal });
+  const r = await run(uv, ['pip', 'compile', ...inputs, '-o', lockFile, '--generate-hashes', ...common], { env, signal });
   if (r.code === 0) return { lockFile, packages: parseLock(await fs.promises.readFile(lockFile, 'utf8')) };
 
-  // Find the culprit(s): resolve each direct requirement on its own.
+  // Find the culprit(s): resolve each direct requirement (and each requirements file) on its own.
   const problems = [];
-  for (const spec of lines) {
-    const one = path.join(workDir, 'one.in');
-    await fs.promises.writeFile(one, spec + '\n');
-    const s = await run(uv, ['pip', 'compile', one, ...common], { env, signal });
-    if (s.code !== 0) problems.push(`${spec.replace(/^-r .*[\\/]/, 'requirements file ')}: ${uvReason(s.stderr)}`);
+  const singles = [...plan.passthrough.map((file) => ({ label: `requirements file ${path.basename(file)}`, file })), ...plan.specs.map((spec) => ({ label: spec, spec }))];
+  for (const one of singles) {
+    let input = one.file;
+    if (!input) {
+      input = path.join(workDir, 'one.in');
+      await fs.promises.writeFile(input, one.spec + '\n');
+    }
+    const s = await run(uv, ['pip', 'compile', input, ...common], { env, signal });
+    if (s.code !== 0) problems.push(`${one.label}: ${uvReason(s.stderr)}`);
   }
   if (!problems.length) problems.push(`the requirements conflict with each other: ${uvReason(r.stderr)}`);
   const hint = `Options: pick a version that ships wheels for ${target.label} and Python ${minor}, build with another --python (3.14 has the widest wheel coverage today), or drop ${target.id}.`;
