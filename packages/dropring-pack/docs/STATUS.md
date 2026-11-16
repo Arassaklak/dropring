@@ -19,6 +19,34 @@ refused).
 | Cross-build for win-x64 from this Mac | all fixtures build; `deps_unknown` refused (runs on Windows happen in CI) |
 | Unit tests | 43 pass, including RECORD tamper detection and every declared-dependency format (Poetry caret/tilde conversion, Pipfile, setup.cfg, PEP 723, dynamic pyproject refused) |
 
+### Verified in CI — run [43851572237](https://github.com/Arassaklak/dropring/actions/runs/43851572237) (commit `968376a`)
+
+**All 18 jobs green; 156 of 156 fixture results passed** (12 app jobs × 13 fixtures): native
+Windows x64 (Python 3.10, 3.14, 3.15), Windows ARM64, Apple Silicon (3.10, 3.14, 3.15), macOS
+Intel, and apps built on Linux for all four targets, unzipped and run on each. `deps_unknown`
+was refused everywhere, `deps_yaml` on 3.15. The three native Apple Silicon jobs were first
+cancelled by GitHub after 15 minutes without a runner (no steps ran); their re-run passed
+(Apple Silicon 3.14 medians: requests 554 ms, pydantic 383 ms, rich 253 ms, yaml 122 ms).
+
+| Dependency fixture, median ms of 5 runs | win-x64 3.14 | win-arm64 3.14 | mac-x64 3.14 | Linux-built win-x64 / win-arm64 / mac-arm64 / mac-x64 |
+|---|---|---|---|---|
+| deps_requests (real HTTPS) | 996 | 838 | 1468 | 769 / 826 / 1010 / 1321 |
+| deps_pydantic (38.5 MB on win-x64) | 666 | 583 | 1161 | 551 / 582 / 575 / 1094 |
+| deps_rich | 435 | 390 | 651 | 355 / 391 / 469 / 723 |
+| deps_click | 509 | 479 | 918 | 439 / 454 / 414 / 973 |
+| deps_jinja2 | 495 | 453 | 1038 | 535 / 433 / 436 / 790 |
+| deps_yaml (libyaml) | 193 | 184 | 321 | 157 / 183 / 268 / 312 |
+
+What this proves: wheels with native code (pydantic-core, PyYAML/libyaml, markupsafe,
+charset-normalizer) resolved on a Linux host for Windows x64/ARM64 and both Macs load and run on
+those machines; markers, `importlib.resources`, `importlib.metadata` and entry points work.
+
+Problems CI found in M2 and how they were fixed:
+- `-r D:\a\...\requirements.txt` written into a generated requirements file lost its
+  backslashes on Windows and uv read `d:adropring...` as a URL; requirements files are now
+  passed to uv as arguments (relative includes resolve from their own folder).
+- The CI script marked successful cross-build rows as failed (missing `ok`) and crashed.
+
 Findings fixed along the way:
 - The cached runtime gained `.pyc` files whenever something ran it without `-B` (here: a manual
   test; potentially uv's interpreter check). Apps copied them, so the output depended on the
