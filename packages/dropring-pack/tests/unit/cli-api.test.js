@@ -18,7 +18,8 @@ test('API rejects planned-but-missing options and bad metadata before doing any 
   writeFiles(dir, { 'a.py': 'print(1)\n' });
   const entry = path.join(dir, 'a.py');
   const base = { entry, targets: 'win-x64', out: path.join(dir, 'out'), processEnv: { DROPRING_PACK_OFFLINE: '1', DROPRING_PACK_CACHE: path.join(dir, 'cache') } };
-  await assert.rejects(build({ ...base, requirements: 'requirements.txt' }), /planned for M2/);
+  await assert.rejects(build({ ...base, trace: true }), /planned for M5/);
+  await assert.rejects(build({ ...base, env: ['NOT VALID=1'] }), /not a valid environment variable name/);
   await assert.rejects(build({ ...base, targets: 'mac-arm64', signCmd: 'sign {file}' }), /--sign-cmd signs Windows executables/);
   await assert.rejects(build({ ...base, mode: 'onefile' }), /planned for M4/);
   await assert.rejects(build({ ...base, version: '1.0-beta' }), /must be numeric/);
@@ -27,5 +28,5 @@ test('API rejects planned-but-missing options and bad metadata before doing any 
   await assert.rejects(build({ ...base, flat: true, targets: 'win-x64,mac-x64' }), /exactly one target/);
   const events = [];
   await assert.rejects(build(base, (e) => events.push(e)), /offline mode/);
-  assert.deepEqual(events.filter((e) => e.type === 'stage').map((e) => e.stage), ['analyze', 'resolve', 'fetch']);
+  assert.deepEqual(events.filter((e) => e.type === 'stage').map((e) => e.stage), ['analyze', 'dependencies', 'resolve', 'fetch']);
 });

@@ -216,6 +216,8 @@ def _main():
     base_dir = os.path.dirname(pack_dir)
     app_dir = os.path.join(base_dir, "app")
     info = _read_app_info(pack_dir)
+    for key, value in (info.get("env") or {}).items():  # baked defaults (--env, hooks)
+        os.environ.setdefault(key, value)
     _GUI_LAUNCH = _gui_launch(info)
     _setup_tcl_tk(os.path.join(base_dir, "python"))
 

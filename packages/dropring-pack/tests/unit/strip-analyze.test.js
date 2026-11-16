@@ -28,7 +28,7 @@ test('strip: macOS rules', () => {
   for (const gone of ['bin/python3.14', 'include/python3.14/Python.h', 'share/man/man1/python3.1', 'lib/pkgconfig/python3.pc',
     'lib/python3.14/config-3.14-darwin/Makefile', 'lib/python3.14/site-packages/pip/__init__.py', 'lib/python3.14/test/test_os.py',
     'lib/python3.14/lib-dynload/_tkinter.cpython-314-darwin.so', 'lib/libtcl9.0.dylib', 'lib/libtcl9tk9.0.dylib', 'lib/tcl9.0/init.tcl', 'lib/tk9.0/tk.tcl',
-    'lib/itcl4.3.8/itcl.tcl', 'lib/thread3.0.6/pkgIndex.tcl', 'lib/python3.14/__pycache__/os.cpython-314.opt-1.pyc']) {
+    'lib/itcl4.3.8/itcl.tcl', 'lib/thread3.0.6/pkgIndex.tcl', 'lib/python3.14/__pycache__/os.cpython-314.opt-1.pyc', 'lib/python3.14/json/__pycache__/decoder.cpython-314.pyc']) {
     assert.notEqual(drop(gone), null, `${gone} must be dropped`);
   }
 });

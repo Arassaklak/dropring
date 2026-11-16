@@ -33,21 +33,44 @@ function arg(name, fallback) {
   return i > 0 ? process.argv[i + 1] : fallback;
 }
 
+/** The build error a fixture expects for this Python version (a regex source), or null. */
+function expectedBuildError(fixture, python) {
+  const e = expectedOf(fixture);
+  const minor = python || require('../runtime/runtimes.json').default;
+  return (e.python && e.python[minor] && e.python[minor].buildError) || e.buildError || null;
+}
+
 async function buildFixtures(targets, { python, launcherDir, out, zip }) {
   const icon = writeTestIcon(path.join(os.tmpdir(), `dropring-pack-test-icon-${process.pid}.png`));
   const rows = [];
   for (const fixture of fixtureNames()) {
     const expected = expectedOf(fixture);
+    const b = expected.build || {};
+    const dir = path.join(FIXTURES, fixture);
+    const expectError = expectedBuildError(fixture, python);
     const t0 = Date.now();
-    const result = await build({
-      entry: path.join(FIXTURES, fixture, expected.entry), targets, python, launcherDir, out, zip,
-      name: appName(fixture), version: VERSION, icon, company: COMPANY, copyright: COPYRIGHT,
-      windowed: !!(expected.build && expected.build.windowed), include: expected.build && expected.build.include,
-    }, (e) => {
-      if (e.type === 'warning') console.log(`warning [${e.target || '-'}] ${e.message}`);
-      if (e.type === 'stage' && e.stage === 'done') console.log(`built [${e.target}] ${e.message}`);
-    });
-    for (const a of result.artifacts) rows.push({ fixture, target: a.target, path: a.path, zipPath: a.zipPath, sizeMB: +(a.sizeBytes / 1048576).toFixed(1), files: a.fileCount, buildMs: Date.now() - t0 });
+    let result;
+    try {
+      result = await build({
+        entry: b.project ? dir : path.join(dir, expected.entry), entryInProject: b.project ? expected.entry : undefined,
+        targets, python, launcherDir, out, zip,
+        name: appName(fixture), version: VERSION, icon, company: COMPANY, copyright: COPYRIGHT,
+        windowed: !!b.windowed, include: b.include,
+      }, (e) => {
+        if (e.type === 'warning') console.log(`warning [${e.target || '-'}] ${e.message}`);
+        if (e.type === 'stage' && e.stage === 'done') console.log(`built [${e.target}] ${e.message}`);
+      });
+    } catch (err) {
+      const ok = !!expectError && new RegExp(expectError, 'i').test(err.message);
+      console.log(`${ok ? 'expected build error' : 'BUILD FAILED'} [${fixture}] ${err.message}`);
+      rows.push({ fixture, target: String(targets), ok, built: false, expectedError: ok, problems: ok ? [] : [`build failed: ${err.message.split('\n').slice(0, 6).join(' / ')}`], note: ok ? 'refused as expected' : undefined });
+      continue;
+    }
+    if (expectError) {
+      rows.push({ fixture, target: String(targets), ok: false, built: false, problems: [`expected the build to fail (/${expectError}/) but it succeeded`] });
+      continue;
+    }
+    for (const a of result.artifacts) rows.push({ fixture, target: a.target, built: true, path: a.path, zipPath: a.zipPath, sizeMB: +(a.sizeBytes / 1048576).toFixed(1), files: a.fileCount, buildMs: Date.now() - t0 });
   }
   return rows;
 }
@@ -97,7 +120,7 @@ async function runAndCheck(fixture, appPath) {
 
 function report(title, rows) {
   const header = '| fixture | target | python | result | size MB | files | first run ms | median ms |\n|---|---|---|---|---|---|---|---|';
-  const lines = rows.map((r) => `| ${r.fixture} | ${r.target} | ${r.python || ''} | ${r.ok ? 'pass' : `**FAIL**: ${(r.problems || []).join('; ').replace(/\|/g, '\\|')}`} | ${r.sizeMB ?? ''} | ${r.files ?? ''} | ${r.firstMs ?? ''} | ${r.medianMs ?? ''} |`);
+  const lines = rows.map((r) => `| ${r.fixture} | ${r.target} | ${r.python || ''} | ${r.ok ? (r.note ? `pass (${r.note})` : 'pass') : `**FAIL**: ${(r.problems || []).join('; ').replace(/\|/g, '\\|')}`} | ${r.sizeMB ?? ''} | ${r.files ?? ''} | ${r.firstMs ?? ''} | ${r.medianMs ?? ''} |`);
   const md = `### ${title}\n\n${header}\n${lines.join('\n')}\n`;
   console.log(md);
   for (const r of rows) if (!r.ok && r.stdout !== undefined) console.log(`--- ${r.fixture} stdout:\n${r.stdout}\n--- stderr:\n${r.stderr}`);
@@ -130,20 +153,24 @@ async function main() {
     const out = path.resolve(arg('out', path.join(ROOT, 'out')));
     const built = await buildFixtures(target, { python, launcherDir, out });
     const rows = [];
-    for (const b of built) rows.push({ ...b, python, ...(await runAndCheck(b.fixture, b.path)) });
+    for (const b of built) rows.push(b.built ? { ...b, python, ...(await runAndCheck(b.fixture, b.path)) } : { ...b, python });
     report(`native ${target}, Python ${python || 'default'}`, rows);
   } else if (cmd === 'cross-build') {
     const out = path.resolve(arg('out', path.join(ROOT, 'cross')));
     const built = await buildFixtures(arg('targets'), { python: arg('python'), launcherDir, out, zip: true });
     if (process.env.GITHUB_STEP_SUMMARY) {
-      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### cross-build on ${process.platform}-${process.arch}\n\n${built.map((b) => `- ${b.target} ${b.fixture}: ${b.sizeMB} MB, ${b.files} files, ${path.basename(b.zipPath)}`).join('\n')}\n\n`);
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### cross-build on ${process.platform}-${process.arch}\n\n${built.map((b) => (b.built ? `- ${b.target} ${b.fixture}: ${b.sizeMB} MB, ${b.files} files, ${path.basename(b.zipPath)}` : `- ${b.fixture}: ${b.ok ? 'refused as expected' : `**FAILED** ${b.problems.join('; ')}`}`)).join('\n')}\n\n`);
     }
+    const failed = built.filter((b) => !b.ok);
+    for (const f of failed) console.log(`FAIL ${f.fixture}: ${f.problems.join('; ')}`);
+    if (failed.length) process.exitCode = 1;
   } else if (cmd === 'run') {
     const target = arg('target');
     const zips = path.resolve(arg('zips'));
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'drp-unzip-'));
     const rows = [];
     for (const fixture of fixtureNames()) {
+      if (expectedBuildError(fixture, arg('python'))) { rows.push({ fixture, target, ok: true, note: 'build refused as expected, nothing to run' }); continue; }
       const zip = fs.readdirSync(zips).find((n) => n.startsWith(`${appName(fixture)}-${VERSION}-`) && n.endsWith('.zip'));
       if (!zip) { rows.push({ fixture, target, ok: false, problems: ['zip not found'] }); continue; }
       const appPath = unzip(path.join(zips, zip), path.join(work, fixture));

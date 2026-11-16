@@ -104,7 +104,7 @@ async function astAnalysis(src, opts) {
   const rt = await ensureRuntime(spec, { env, cacheDir: opts.cacheDir, signal: opts.signal, onProgress: opts.onProgress });
   const exe = process.platform === 'win32' ? path.join(rt.root, 'python.exe') : path.join(rt.root, 'bin', `python${spec.minor}`);
   const report = await runAnalyzer(exe, { root: src.root, mode: src.mode, entry: src.entry, hidden: opts.hiddenImports || [], exclude: opts.excludeModules || [] }, opts.signal);
-  return { ...report, analyzer: 'ast' };
+  return { ...report, analyzer: 'ast', pythonExe: exe };
 }
 
 /** M0 text scan, kept as a fallback when the AST analyzer cannot run. */
@@ -173,6 +173,7 @@ async function analyze(input, opts = {}) {
     usesTkinter: report.usesTkinter,
     analyzer: report.analyzer,
     analyzerPython: report.python,
+    pythonExe: report.pythonExe || null, // this computer's Python of the target version (for uv)
     warnings,
   };
 }

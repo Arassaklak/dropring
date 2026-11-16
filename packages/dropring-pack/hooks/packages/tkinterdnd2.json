@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "package": "tkinterdnd2",
+  "stdlib": [
+    "tkinter"
+  ],
+  "notes": "needs tkinter (Tcl/Tk) from the standard library, which is only bundled when used; ships tkdnd binaries for each platform inside the package"
+}

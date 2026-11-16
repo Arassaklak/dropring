@@ -1,0 +1,7 @@
+{
+  "description": "Jinja2 + compiled markupsafe, template read with importlib.resources from a local package; dependencies inferred from imports; project-folder build",
+  "entry": "main.py",
+  "build": { "project": true },
+  "exitCode": 0,
+  "stdoutJson": { "rendered": "Merhaba Dünya! ✓✓✓", "speedups": true }
+}

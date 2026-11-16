@@ -10,6 +10,7 @@
 // Stages: analyze, then per target resolve → fetch → assemble → brand → sign → verify (→ zip).
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { parseTargets, TARGETS, hostTargetId } = require('./targets');
 const { analyze } = require('./analyze');
@@ -19,12 +20,16 @@ const { assembleOnedir } = require('./assemble');
 const { cacheRoot } = require('./cache');
 const { checkAnalysis, checkTarget, guiHint } = require('./checks');
 const { resolveIncludes } = require('./include');
+const deps = require('./deps');
+const { loadHooks, applyHooks } = require('./hooks');
+const { ensureUv } = require('./tools');
+const { hostTriple } = require('./targets');
 const { slug, sha256, throwIfAborted } = require('./util');
 
 const VERSION = require('../package.json').version;
 
 /** Options that are part of the CLI/API contract but not implemented yet, with their milestone. */
-const PLANNED = { requirements: 'M2', hooks: 'M2', env: 'M2', trace: 'M5', fallback: 'M7' };
+const PLANNED = { trace: 'M5', fallback: 'M7' };
 
 /**
  * @typedef {object} BuildOptions
@@ -46,6 +51,13 @@ const PLANNED = { requirements: 'M2', hooks: 'M2', env: 'M2', trace: 'M5', fallb
  * @property {string[]} [hiddenImports]     modules to bundle although no import was found
  * @property {string[]} [excludeModules]    imports to ignore (never reached at runtime)
  * @property {string} [signCmd]             Windows: command template that signs the .exe ({file})
+ * @property {string} [requirements]        requirements file (overrides the project's declared dependencies)
+ * @property {string[]} [packages]          extra requirements, e.g. ['requests>=2.32']
+ * @property {string} [indexUrl]            package index (default PyPI)
+ * @property {string[]} [extraIndexUrls]
+ * @property {string[]} [findLinks]         local folders/URLs with wheels
+ * @property {string[]|Record<string,string>} [env]  runtime defaults baked into the app (KEY=VALUE; never secrets)
+ * @property {string} [hooks]               folder with your own package hooks (*.json)
  * @property {boolean} [zip]                also write <name>-<version>-<target>.zip
  * @property {string} [out]                 output folder (default: dist)
  * @property {boolean} [flat]               single target only: put the app directly into `out`
@@ -103,7 +115,7 @@ async function build(options, onEvent = () => {}) {
   });
   for (const message of analysis.warnings) emit({ type: 'warning', message });
   emit({ type: 'log', level: 'info', message: `${analysis.analyzer === 'ast' ? `AST analysis (Python ${analysis.analyzerPython})` : 'text scan'}: ${analysis.files.length} file(s), entry ${analysis.entry}, ${analysis.imports.length} imported module(s)${analysis.gui.length ? `, GUI: ${analysis.gui.join(', ')}` : ''}` });
-  const general = checkAnalysis(analysis, { python });
+  const general = checkAnalysis(analysis);
   const perTarget = targets.map((t) => ({ t, ...checkTarget(analysis, t) }));
   const hint = guiHint(analysis, o.windowed);
   for (const message of [...general.warnings, ...(hint ? [hint] : [])]) emit({ type: 'warning', message });
@@ -125,14 +137,56 @@ async function build(options, onEvent = () => {}) {
   };
   const includes = await resolveIncludes(o.include, analysis.root);
   const icon = o.icon ? await prepareIcon(o.icon, targets, emit) : null;
+  const bakedEnv = parseEnv(o.env, emit);
+  const hooks = loadHooks(o.hooks);
+
+  // Dependencies: what to install (declared, inferred from imports, --package), see ADR-0009.
+  emit({ type: 'stage', stage: 'dependencies', message: 'reading declared dependencies' });
+  const toolPython = await toolPythonFor(analysis, { env, cacheDir, signal: o.signal });
+  const plan = await deps.planDependencies({ analysis, requirements: o.requirements, packages: o.packages || [], toolPython, signal: o.signal });
+  for (const message of plan.warnings) emit({ type: 'warning', message });
+  if (plan.source) emit({ type: 'log', level: 'info', message: `dependencies from ${plan.source}${plan.inferred.length ? `: ${plan.inferred.map((i) => `${i.dist} (import ${i.import}, ${i.where})`).join(', ')}` : ''}` });
+  const declared = !!plan.source && plan.source !== 'inferred from imports';
+  const uv = deps.hasWork(plan) ? await ensureUv({ env, cacheDir, signal: o.signal }) : null;
+  if (uv && !analysis.pythonExe) throw new Error('installing dependencies needs a Python runtime for this computer, which is not available here');
+  const temps = [];
 
   const artifacts = [];
+  try {
   for (const target of targets) {
     throwIfAborted(o.signal);
     const tag = { target: target.id };
     emit({ type: 'stage', stage: 'resolve', ...tag, message: `Python ${python} for ${target.label}` });
     const runtime = resolveRuntime(python, target, env);
     if (runtime.endOfLife) emit({ type: 'warning', ...tag, message: `Python ${runtime.minor} is end-of-life and no longer receives security fixes; prefer 3.11 or newer` });
+
+    // Dependencies for this target, before any large download.
+    let sitePackages = null;
+    let distributions = [];
+    let provided = new Set();
+    let hookResult = { applied: [], keepTkinter: false, env: {} };
+    if (uv) {
+      emit({ type: 'stage', stage: 'dependencies', ...tag, message: `resolving for ${target.label}, Python ${runtime.minor}` });
+      const work = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dropring-pack-deps-'));
+      temps.push(work);
+      const uvenv = deps.uvEnv(cacheDir, env);
+      const resolved = await deps.resolve({ uv, plan, target, minor: runtime.minor, workDir: work, options: o, env: uvenv, signal: o.signal });
+      emit({ type: 'log', level: 'info', ...tag, message: `${resolved.packages.length} package(s): ${resolved.packages.map((p) => `${p.name} ${p.version}`).join(', ')}` });
+      sitePackages = path.join(work, 'site-packages');
+      await deps.install({ uv, lockFile: resolved.lockFile, siteDir: sitePackages, python: analysis.pythonExe, target, minor: runtime.minor, options: o, env: uvenv, signal: o.signal });
+      ({ distributions, provided } = await deps.verifyAndClean(sitePackages));
+      emit({ type: 'log', level: 'info', ...tag, message: `installed and verified ${distributions.length} distribution(s) against their RECORD hashes` });
+      hookResult = applyHooks(hooks, distributions, target);
+      for (const h of hookResult.applied) if (h.notes) emit({ type: 'log', level: 'info', ...tag, message: `hook ${h.package}: ${h.notes}` });
+    }
+    const missing = deps.missingImports(analysis, provided, { python: runtime.minor, declared });
+    for (const message of missing.warnings) emit({ type: 'warning', ...tag, message });
+    if (missing.errors.length) {
+      const err = new Error(`the app cannot be built for ${target.label}:\n  - ${missing.errors.join('\n  - ')}`);
+      err.code = 'ANALYSIS_FAILED';
+      err.problems = missing.errors;
+      throw err;
+    }
 
     emit({ type: 'stage', stage: 'fetch', ...tag, message: `Python ${runtime.version} (python-build-standalone ${runtime.release})` });
     lastPct = -1;
@@ -151,11 +205,16 @@ async function build(options, onEvent = () => {}) {
     const destDir = o.flat ? outDir : path.join(outDir, target.id);
     const artifact = await assembleOnedir({
       target, runtime, runtimeRoot: fetched.root, launcher, analysis, app, destDir, macSign, emit, signal: o.signal, env,
+      sitePackages, keepTkinter: analysis.usesTkinter || hookResult.keepTkinter, appEnv: { ...hookResult.env, ...bakedEnv },
+      dependencies: { source: plan.source, distributions, hooks: hookResult.applied.map((h) => h.package) },
       icon: icon && { ico: target.os === 'windows' ? icon.ico() : null, icns: target.os === 'macos' ? icon.icns() : null, sha256: icon.sha256 },
       includes, signCmd: target.os === 'windows' ? o.signCmd : undefined, zip: !!o.zip,
     });
     emit({ type: 'stage', stage: 'done', ...tag, message: `${artifact.path} (${(artifact.sizeBytes / 1048576).toFixed(1)} MB, ${artifact.fileCount} files)` });
     artifacts.push(artifact);
+  }
+  } finally {
+    for (const t of temps) await fs.promises.rm(t, { recursive: true, force: true });
   }
   const manifest = artifacts.map((a) => JSON.parse(fs.readFileSync(a.manifestPath, 'utf8')));
   return { artifacts, manifest, warnings };
@@ -174,6 +233,28 @@ async function prepareIcon(file, targets, emit) {
     icns: () => (icns || (icns = makeIcns(loaded.image))),
     targets,
   };
+}
+
+/** --env KEY=VALUE pairs (or an object) → {KEY: VALUE}. Values end up inside the app: never secrets. */
+function parseEnv(spec, emit) {
+  const out = {};
+  const entries = Array.isArray(spec) ? spec.map((s) => { const i = String(s).indexOf('='); if (i <= 0) throw new Error(`--env "${s}": expected KEY=VALUE`); return [s.slice(0, i), s.slice(i + 1)]; }) : Object.entries(spec || {});
+  for (const [k, v] of entries) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) throw new Error(`--env ${k}: not a valid environment variable name`);
+    if (/(SECRET|PASSWORD|PASSWD|TOKEN|API_?KEY|PRIVATE)/i.test(k)) emit({ type: 'warning', message: `--env ${k} looks like a secret; values are stored inside the app where anyone can read them` });
+    out[k] = String(v);
+  }
+  return out;
+}
+
+/** A Python 3.11+ for reading pyproject.toml/Pipfile/PEP 723 (tomllib). */
+async function toolPythonFor(analysis, { env, cacheDir, signal }) {
+  if (analysis.analyzer !== 'ast') return null;
+  if (Number(String(analysis.analyzerPython).split('.')[1]) >= 11) return analysis.pythonExe;
+  const triple = hostTriple();
+  const spec = resolveRuntime(MANIFEST.default, { triple, label: `this computer (${triple})` }, env);
+  const rt = await ensureRuntime(spec, { env, cacheDir, signal });
+  return process.platform === 'win32' ? path.join(rt.root, 'python.exe') : path.join(rt.root, 'bin', `python${spec.minor}`);
 }
 
 function defaultName(analysis) {

@@ -1,0 +1,8 @@
+{
+  "description": "click command line with options and exit code; dependency declared in setup.cfg",
+  "entry": "main.py",
+  "args": ["--ad", "Ayşe", "--kez", "2"],
+  "exitCode": 3,
+  "stdout": "Merhaba Ayşe!\nMerhaba Ayşe!",
+  "stderr": "click 8"
+}

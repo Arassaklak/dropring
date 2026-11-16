@@ -1,0 +1,13 @@
+{
+  "description": "requests + certifi over HTTPS, stdlib HTTPS, importlib.metadata version and entry points; requirements.txt",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "requests_status": 200,
+    "stdlib_status": 200,
+    "certifi_in_bundle": true,
+    "metadata_version": true,
+    "entry_point_found": true,
+    "compiled_extension": true
+  }
+}

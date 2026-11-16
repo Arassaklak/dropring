@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "package": "pywin32",
+  "targets": [
+    "windows"
+  ],
+  "notes": "pywin32.pth adds win32/ and loads pythoncom/pywintypes DLLs from pywin32_system32; .pth files are processed by the bootstrap"
+}

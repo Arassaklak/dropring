@@ -1,0 +1,5 @@
+{
+  "description": "Unknown third-party import without declared dependencies: refused with file:line, nothing installed",
+  "entry": "main.py",
+  "buildError": "main\\.py:4: imports totally_unknown_dropring_pkg, which is not a standard-library module and not on dropring-pack's list of known packages"
+}

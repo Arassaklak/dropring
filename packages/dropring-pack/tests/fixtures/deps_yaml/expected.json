@@ -1,0 +1,7 @@
+{
+  "description": "PyYAML (inferred: import yaml -> PyYAML) with libyaml; PyYAML has no wheels for Python 3.15 yet, so that build must fail with a precise message",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": { "sehir": "İzmir", "toplam": 6, "libyaml": true, "roundtrip": true },
+  "python": { "3.15": { "buildError": "pyyaml[\\s\\S]*no usable wheels" } }
+}

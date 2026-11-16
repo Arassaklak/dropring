@@ -57,28 +57,21 @@ test('AST analyzer: syntax errors, shadowing, relative import in the entry scrip
   assert.equal(r.modules.queue.where, '--hidden-import');
 });
 
-test('checks: missing, removed and OS-specific modules', () => {
+test('checks: syntax errors, dynamic imports, OS-specific modules, GUI hint', () => {
   const analysis = {
     analyzer: 'ast',
     syntaxErrors: [{ where: 'bad.py:1:7', message: 'invalid syntax' }],
     modules: {
       requests: { kind: 'required', category: 'third-party', where: 'main.py:1' },
-      ujson: { kind: 'optional', category: 'third-party', where: 'main.py:2' },
-      distutils: { kind: 'required', category: 'third-party', where: 'main.py:3' },
       winreg: { kind: 'required', category: 'stdlib', where: 'main.py:4' },
       fcntl: { kind: 'conditional', category: 'stdlib', where: 'main.py:5' },
-      numpy: { kind: 'typing', category: 'third-party', where: 'main.py:6' },
     },
     dynamic: [{ where: 'main.py:9', expression: 'importlib.import_module(name)' }],
     gui: ['tkinter'],
   };
-  const g = checkAnalysis(analysis, { python: '3.14' });
-  assert.equal(g.errors.length, 3, g.errors.join('\n'));
-  assert.ok(g.errors.some((e) => /bad\.py:1:7/.test(e)));
-  assert.ok(g.errors.some((e) => /requests, a third-party package.*--exclude-module requests/.test(e)));
-  assert.ok(g.errors.some((e) => /distutils, which was removed .* 3\.12; build with --python 3\.11/.test(e)));
-  assert.ok(g.warnings.some((w) => /ujson/.test(w)) && g.warnings.some((w) => /--hidden-import/.test(w)));
-  assert.ok(!g.warnings.some((w) => /numpy/.test(w)), 'type-only imports are ignored');
+  const g = checkAnalysis(analysis);
+  assert.deepEqual(g.errors, ['bad.py:1:7: invalid syntax (the app could not start)'], 'third-party imports are checked after installation');
+  assert.ok(g.warnings.some((w) => /main\.py:9: .*--hidden-import/.test(w)));
   assert.equal(checkTarget(analysis, TARGETS['mac-arm64']).errors.length, 1);
   assert.equal(checkTarget(analysis, TARGETS['win-x64']).errors.length, 0, 'fcntl is only conditional');
   assert.match(guiHint(analysis, undefined), /--windowed/);

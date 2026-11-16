@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "package": "matplotlib",
+  "stdlib": [
+    "tkinter"
+  ],
+  "notes": "the default backend on Windows is TkAgg, so tkinter is bundled; set MPLBACKEND with --env to force another backend"
+}

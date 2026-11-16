@@ -1,0 +1,6 @@
+{
+  "description": "rich; dependency declared in a PEP 723 inline script block",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": { "title": true, "row": true, "box": true }
+}

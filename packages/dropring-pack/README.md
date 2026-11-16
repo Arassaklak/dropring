@@ -4,9 +4,9 @@ Turns a Python script or project into a standalone **Windows app folder (`.exe`)
 `.app`** — from any build machine, without Python installed on either side, and without
 PyInstaller. Part of [DropRing](../../README.md); usable on its own as a CLI and Node library.
 
-> Status: **M1**. Pure-Python apps (standard library only), onedir output, Windows x64/ARM64 and
-> macOS arm64/x64, icons and version info, GUI (tkinter) apps, data files, zips. Third-party
-> dependencies (M2), onefile (M4) and the DropRing ring action (M6) are not there yet.
+> Status: **M2**. Apps with third-party packages (installed as wheels for each target, hash-checked),
+> onedir output, Windows x64/ARM64 and macOS arm64/x64, icons and version info, GUI (tkinter)
+> apps, data files, zips. Onefile (M4) and the DropRing ring action (M6) are not there yet.
 > Design: [docs/DESIGN.md](docs/DESIGN.md), decisions: [docs/adr/](docs/adr/), evidence:
 > [docs/STATUS.md](docs/STATUS.md).
 
@@ -18,7 +18,11 @@ your script ──► analyze ─► fetch pinned CPython (python-build-standalo
                                      └► Info.plist / ad-hoc signature (macOS) ─► manifest.json
 ```
 
-Imports are checked before anything is built: the code is parsed (never run) by a Python of the
+Dependencies come from requirements.txt, pyproject.toml (PEP 621 or Poetry), setup.cfg, Pipfile
+or a PEP 723 block, or are inferred from imports of well-known packages (`import yaml` →
+PyYAML); an unknown import is refused rather than guessed. uv resolves them for each target's
+OS, CPU and Python version, wheels only, and every installed file is checked against its
+wheel's RECORD. Imports are also checked before anything is built: the code is parsed (never run) by a Python of the
 same version as the app, so a missing module, a module that does not exist on a target OS
 (`winreg` on macOS) or a syntax error is reported with file and line. The launcher is a
 ~240–300 KB Rust program with no dependencies. It loads the bundled Python library

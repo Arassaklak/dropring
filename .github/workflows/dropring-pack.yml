@@ -165,6 +165,7 @@ jobs:
           name: cross-apps
           path: packages/dropring-pack/cross/*/*.zip
           if-no-files-found: error
+          retention-days: 3
 
   cross-run:
     name: run Linux-built ${{ matrix.target }}

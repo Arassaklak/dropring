@@ -88,4 +88,36 @@ async function zipDirectory(dir, outFile, { date, modeOf }) {
   return outFile;
 }
 
-module.exports = { zipDirectory, dosDateTime };
+/**
+ * Extracts one file from a zip archive (used for tool downloads such as uv.exe).
+ * @returns {Promise<Buffer>}
+ */
+async function readZipEntry(zipFile, wanted) {
+  const buf = await fs.promises.readFile(zipFile);
+  const end = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (end < 0) throw new Error(`${path.basename(zipFile)} is not a zip archive`);
+  const count = buf.readUInt16LE(end + 10);
+  let off = buf.readUInt32LE(end + 16);
+  for (let i = 0; i < count; i++) {
+    if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error('corrupt zip central directory');
+    const method = buf.readUInt16LE(off + 10);
+    const crc = buf.readUInt32LE(off + 16);
+    const compressed = buf.readUInt32LE(off + 20);
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const local = buf.readUInt32LE(off + 42);
+    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
+    off += 46 + nameLen + extraLen + commentLen;
+    if (name !== wanted && !name.endsWith(`/${wanted}`)) continue;
+    const dataStart = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const raw = buf.subarray(dataStart, dataStart + compressed);
+    const data = method === 8 ? zlib.inflateRawSync(raw) : method === 0 ? raw : null;
+    if (!data) throw new Error(`unsupported zip compression method ${method}`);
+    if (crc32(data) !== crc) throw new Error(`CRC mismatch for ${name}`);
+    return data;
+  }
+  throw new Error(`${wanted} not found in ${path.basename(zipFile)}`);
+}
+
+module.exports = { zipDirectory, dosDateTime, readZipEntry };

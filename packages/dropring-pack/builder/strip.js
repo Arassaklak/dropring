@@ -29,7 +29,9 @@ function runtimeFilter({ os, minor, keepTkinter }) {
   deny(new RegExp(`^${esc(stdlib)}/site-packages/.+`), 'pre-installed packages (pip); apps get their own site-packages');
   deny(new RegExp(`^${esc(stdlib)}/(ensurepip|idlelib|turtledemo|__phello__)(/|$)`), 'not used by applications');
   deny(new RegExp(`^${esc(stdlib)}/(.+/)?(test|tests|idle_test)(/|$)`), 'test suites');
-  deny(/(^|\/)__pycache__\/[^/]+\.opt-[12]\.pyc$/, 'optimised bytecode for -O/-OO');
+  // Bytecode caches in the cached runtime depend on whatever ran from it (the analyzer, uv's
+  // interpreter check, manual tests); copying them would make apps differ build to build.
+  deny(/(^|\/)__pycache__(\/|$)/, 'bytecode caches (not reproducible; apps compile in memory)');
 
   if (!keepTkinter) {
     const why = 'Tcl/Tk is only bundled when the app imports tkinter';

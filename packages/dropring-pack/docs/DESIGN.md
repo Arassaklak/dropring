@@ -1,6 +1,6 @@
 # dropring-pack — design
 
-Status: M1 · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/) · progress and evidence in [STATUS.md](STATUS.md).
+Status: M2 · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/) · progress and evidence in [STATUS.md](STATUS.md).
 
 ## 1. What it is
 
@@ -132,7 +132,12 @@ data folder and shown in a native dialog (`MessageBoxW` / `CFUserNotificationDis
 launcher does the same for its own start-up errors. `DROPRING_PACK_NO_DIALOGS=1` suppresses the
 dialogs (CI, scripts).
 
-## 6. Dependencies and cross-target wheels (M2/M3)
+## 6. Dependencies and cross-target wheels (M2 done; native-extension verification M3)
+
+Implemented as decided in ADR-0009: declared sources first, allow-listed inference otherwise,
+per-target `uv pip compile` (hashes) + `uv pip install --target --require-hashes --no-deps`,
+RECORD verification, a provided-imports check, and JSON package hooks (`hooks/packages/`,
+`--hooks`). The original plan follows.
 
 Layered discovery, each layer logged: declared deps → AST imports (run by the host runtime) →
 distribution metadata (`top_level.txt`, `RECORD`, markers) → hook database → optional `--trace`

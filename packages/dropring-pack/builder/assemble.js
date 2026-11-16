@@ -122,6 +122,10 @@ function launcherConfig({ target, runtime, layout, utf8Mode }) {
  * @param {{ico: Buffer|null, icns: Buffer|null, sha256: string}|null} [o.icon]  prepared icon files
  * @param {{from: string, to: string}[]} [o.includes]  extra data files (to = path inside app/)
  * @param {string} [o.signCmd]    Windows: command template that signs the executable
+ * @param {string|null} [o.sitePackages]  verified third-party packages to copy into the app
+ * @param {boolean} [o.keepTkinter]       bundle Tcl/Tk (app or a dependency uses tkinter)
+ * @param {Record<string, string>} [o.appEnv]  runtime defaults (os.environ.setdefault)
+ * @param {{source: string|null, distributions: object[], hooks: string[]}} [o.dependencies]
  * @param {boolean} [o.zip]       also write <name>-<version>-<target>.zip next to the app
  * @param {string} o.destDir      folder that receives the app
  * @param {'adhoc'|'none'} o.macSign
@@ -151,7 +155,7 @@ async function assembleOnedir(o) {
   try {
     // 1. Runtime
     emit({ type: 'stage', stage: 'assemble', ...tag, message: `copying Python ${runtime.version} runtime` });
-    const filter = runtimeFilter({ os: target.os, minor: runtime.minor, keepTkinter: analysis.usesTkinter });
+    const filter = runtimeFilter({ os: target.os, minor: runtime.minor, keepTkinter: o.keepTkinter ?? analysis.usesTkinter });
     const copied = await copyRuntime(o.runtimeRoot, join(base, 'python'), filter, warn);
     for (const [reason, bytes] of copied.dropped) emit({ type: 'log', level: 'debug', ...tag, message: `stripped ${(bytes / 1048576).toFixed(1)} MB: ${reason}` });
     if (!fs.existsSync(join(base, `python/${files.lib}`))) throw new Error(`the runtime has no ${files.lib}; its layout changed (python-build-standalone ${runtime.release})`);
@@ -168,11 +172,24 @@ async function assembleOnedir(o) {
       await fs.promises.mkdir(path.dirname(dest), { recursive: true });
       await fs.promises.copyFile(from, dest);
     }
+    if (o.sitePackages) {
+      const dists = (o.dependencies && o.dependencies.distributions) || [];
+      emit({ type: 'stage', stage: 'assemble', ...tag, message: `copying ${dists.length} third-party distribution(s)` });
+      for (const e of await walk(o.sitePackages)) {
+        if (e.type === 'dir') continue;
+        const dest = join(base, `site-packages/${e.rel}`);
+        await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+        if (e.type === 'symlink') await fs.promises.symlink(await fs.promises.readlink(e.abs), dest);
+        else await fs.promises.copyFile(e.abs, dest);
+      }
+    }
 
     // 3. Bootstrap, helper module, app info, launcher config
     await fs.promises.mkdir(join(base, 'pack'), { recursive: true });
     for (const f of ['boot.py', 'dropring_pack_runtime.py']) await fs.promises.copyFile(path.join(BOOT_DIR, f), join(base, `pack/${f}`));
+    const appEnv = o.appEnv || {};
     const appInfo = { format: 1, name: app.name, appId: app.appId, version: app.version, entry: `app/${analysis.entry}`, mode: 'onedir', subsystem: app.windowed ? 'windowed' : 'console', packVersion: PACK_VERSION };
+    if (Object.keys(appEnv).length) appInfo.env = appEnv;
     await fs.promises.writeFile(join(base, 'pack/app.json'), JSON.stringify(appInfo, null, 2) + '\n');
     await fs.promises.writeFile(join(base, CONFIG_FILE), launcherConfig({ target, runtime, layout: files, utf8Mode: app.utf8Mode }));
 
@@ -223,6 +240,8 @@ async function assembleOnedir(o) {
       branding: { icon: o.icon ? o.icon.sha256 : null, company: app.company || null, copyright: app.copyright || null, dpiAware: !!app.dpiAware },
       analysis: { mode: analysis.mode, analyzer: analysis.analyzer, analyzerPython: analysis.analyzerPython, imports: analysis.imports, gui: analysis.gui, usesTkinter: analysis.usesTkinter },
       includes: includes.map((i) => i.to),
+      dependencies: o.dependencies ? { source: o.dependencies.source, hooks: o.dependencies.hooks, distributions: o.dependencies.distributions.map(({ name, version, tag, license, files }) => ({ name, version, tag, license, files })) } : null,
+      env: Object.keys(appEnv).sort(), // names only: values are not repeated in the manifest
       files: [],
       totals: null,
     };

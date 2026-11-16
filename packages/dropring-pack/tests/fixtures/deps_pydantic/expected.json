@@ -1,0 +1,6 @@
+{
+  "description": "pydantic with its compiled core; dependency declared in pyproject.toml [project]",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": { "ad": "Ayşe", "yas": 30, "errors": 1, "core_compiled": true }
+}

@@ -1,6 +1,7 @@
 'use strict';
 // Turns the analysis into build errors and warnings. Errors are things that would make the app
 // fail on start; warnings are things that might fail later. Every message names file:line.
+// Third-party imports are checked after installation (deps.missingImports), not here.
 
 const WINDOWS_ONLY = new Set(['winreg', 'msvcrt', '_winapi', 'winsound', '_overlapped', 'nt', '_msi', 'msilib', '_wmi']);
 const POSIX_ONLY = new Set(['fcntl', 'termios', 'tty', 'pty', 'pwd', 'grp', 'resource', 'posix', 'syslog', 'crypt', 'spwd', 'nis', '_posixsubprocess', '_posixshmem', 'readline', 'curses', '_curses', '_curses_panel', 'ossaudiodev']);
@@ -12,24 +13,21 @@ const REMOVED = {
 };
 const minorOf = (v) => Number(String(v).split('.')[1]);
 
+/** Why a module is missing, for messages: removed from the standard library, or not installed. */
+function missingReason(name, python) {
+  if (REMOVED[name] && minorOf(python) >= minorOf(REMOVED[name])) {
+    return `${name} was removed from the standard library in Python ${REMOVED[name]}; build with --python 3.${minorOf(REMOVED[name]) - 1}, install a replacement, or stop using it`;
+  }
+  return null;
+}
+
 /** Target-independent problems. */
-function checkAnalysis(analysis, { python }) {
+function checkAnalysis(analysis) {
   const errors = [];
   const warnings = [];
   for (const e of analysis.syntaxErrors || []) errors.push(`${e.where}: ${e.message} (the app could not start)`);
-  for (const [name, m] of Object.entries(analysis.modules || {})) {
-    if (m.category !== 'third-party' || m.kind === 'typing') continue;
-    let msg;
-    if (REMOVED[name] && minorOf(python) >= minorOf(REMOVED[name])) {
-      msg = `${m.where}: imports ${name}, which was removed from the standard library in Python ${REMOVED[name]}; build with --python 3.${minorOf(REMOVED[name]) - 1} or stop using it`;
-    } else {
-      msg = `${m.where}: imports ${name}, a third-party package. Installing dependencies arrives in M2; until then only the standard library is bundled`;
-    }
-    if (m.kind === 'required') errors.push(`${msg}. If this import is never reached, pass --exclude-module ${name}`);
-    else warnings.push(`${msg} (the import is ${m.kind}, so the app may still start)`);
-  }
   for (const d of analysis.dynamic || []) {
-    warnings.push(`${d.where}: ${d.expression} cannot be resolved statically; if it loads a module of yours or of the standard library, add --hidden-import <module>`);
+    warnings.push(`${d.where}: ${d.expression} cannot be resolved statically; if it loads a module, add --hidden-import <module> (or --package for a third-party one)`);
   }
   if (analysis.analyzer === 'text') warnings.push('imports were checked with a text scan only; missing modules are not detected');
   return { errors, warnings };
@@ -54,4 +52,4 @@ function guiHint(analysis, windowed) {
   return `the app uses ${analysis.gui.join(', ')}: pass --windowed so Windows does not open a console window next to it (or --console to keep it and silence this hint)`;
 }
 
-module.exports = { checkAnalysis, checkTarget, guiHint, WINDOWS_ONLY, POSIX_ONLY, REMOVED };
+module.exports = { checkAnalysis, checkTarget, guiHint, missingReason, WINDOWS_ONLY, POSIX_ONLY, REMOVED };

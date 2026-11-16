@@ -1,5 +1,34 @@
 # dropring-pack status
 
+## M2 — third-party dependencies (2026-11-16)
+
+New fixtures: `deps_requests` (requirements.txt), `deps_rich` (PEP 723), `deps_pydantic`
+(pyproject.toml), `deps_click` (setup.cfg), `deps_jinja2` (inferred, project folder,
+`importlib.resources`), `deps_yaml` (inferred via `yaml → PyYAML`), `deps_unknown` (must be
+refused).
+
+### Verified locally (macOS 26.6.2 arm64)
+
+| What | Evidence |
+|---|---|
+| uv | 0.13.5 downloaded, SHA-256 matches the release digest, cached and reused |
+| Cross-target resolution | from this Mac for Windows x64: `cp314-win_amd64.pyd` wheels for pydantic-core, PyYAML, markupsafe, charset-normalizer; markers for the target (`colorama` only on Windows for tqdm) |
+| Wheel coverage, Python 3.14 | all six M2 packages resolve for all four targets; 3.10 for all but win-arm64 (no 3.10 runtime there); **3.15: PyYAML has no wheels yet** on any target |
+| All 13 fixtures, mac-arm64, Python 3.14 | pass; real HTTPS to pypi.org with `requests` (certifi) and with `urllib` (system certificates) |
+| Python 3.15, mac-arm64 | all dependency fixtures pass; `deps_yaml` refused with uv's reason and the three options |
+| Cross-build for win-x64 from this Mac | all fixtures build; `deps_unknown` refused (runs on Windows happen in CI) |
+| Unit tests | 43 pass, including RECORD tamper detection and every declared-dependency format (Poetry caret/tilde conversion, Pipfile, setup.cfg, PEP 723, dynamic pyproject refused) |
+
+Findings fixed along the way:
+- The cached runtime gained `.pyc` files whenever something ran it without `-B` (here: a manual
+  test; potentially uv's interpreter check). Apps copied them, so the output depended on the
+  cache's history. Runtime `__pycache__` folders are no longer copied, and uv runs with
+  `PYTHONDONTWRITEBYTECODE=1`.
+- python-build-standalone's Windows archive ships 612 `.pyc` files that are stale (they record
+  the build-time source mtime, the archive resets sources to 2024-01-01), so Python ignored
+  them; not copying them saves ~4.3 MB and 171 files per Windows app. Valid build-time
+  bytecode is an M7 start-up optimisation.
+
 ## M1 — analyzer, branding, GUI apps (2026-11-16)
 
 Fixtures `hello`, `args_exit_code`, `unicode_path`, `stdin_echo`, `gui_tk_window`,
@@ -20,6 +49,35 @@ copyright, so every run also exercises the branded launcher.
 | Windows branding from a Mac host | resedit read-back: version strings, 7 icon sizes (16–256), DPI-aware manifest keeps UTF-8 code page and long-path setting |
 | Zip | `ditto` unzip keeps the launcher executable and the signature valid; zipped apps run; two zips byte-identical |
 | Bug found and fixed | `codesign` refused to seal bundles whose executable name is non-ASCII ("a sealed resource is missing or invalid"); executables are now ASCII-named |
+
+### Verified in CI — run [43844831068](https://github.com/Arassaklak/dropring/actions/runs/43844831068) (commit `266a080`)
+
+**All 18 jobs green; 72 of 72 fixture runs passed** (12 app jobs × 6 fixtures). Each "pass"
+includes the branding check with the OS's own tools: PowerShell `VersionInfo` + icon resources
+on Windows, `plutil` + `iconutil` on macOS. One job (`native mac-arm64 py3.14`) was first
+cancelled by GitHub after 15 minutes without a runner (no steps ran); its re-run passed
+(hello 258 ms, Tk window 940 ms median, 29.1 MB).
+
+| Job (median ms of 5 runs: hello / tkinter window) | size MB (Tk app) | files |
+|---|---|---|
+| native win-x64 py3.14 | 34.8 (41.6) — 172 / 359 | 778 |
+| native win-x64 py3.10 | 27.1 (37.3) — 176 / 358 | 839 |
+| native win-x64 py3.15 | 37.4 (44.2) — 174 / 362 | 842 |
+| native win-arm64 py3.14 | 35.7 (42.4) — 165 / 380 | 778 |
+| native mac-arm64 py3.10 | 25.5 (33.7) — 168 / 605 | 662 |
+| native mac-arm64 py3.15 | 31.2 (39.4) — 177 / 506 | 642 |
+| native mac-x64 py3.14 | 29.8 (37.8) — 246 / 927 | 583 |
+| Linux-built → win-x64 / win-arm64 | — 184 / 371, 184 / 407 | |
+| Linux-built → mac-arm64 / mac-x64 | — 144 / 457, 405 / 1097 | |
+
+Problems CI found in M1 and how they were fixed:
+- A windowed Windows app *has* stdout when its parent passes pipes (only Explorer starts it
+  without); the fixture no longer asserts `sys.stdout is None`.
+- `fs.cpSync` killed the Node test runner on Windows for a non-ASCII destination path (no
+  output, no error); the runner now copies file by file.
+- Windows' built-in `tar.exe` converts zip entry names to the ANSI code page and skips names like
+  `içerik ✓.txt`; .NET `ZipFile` (UTF-8 flag) extracts them. Our zips are fine; that tool is not.
+- PowerShell `Expand-Archive` needed minutes for six ~800-file apps; .NET `ZipFile` is fast.
 
 ## M0 — spike (2026-11-16)
 

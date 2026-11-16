@@ -46,8 +46,17 @@ Build options:
   --no-utf8-mode         do not enable Python UTF-8 mode in the app
   --json                 machine-readable events, one JSON object per line
 
-Planned (not yet available): --requirements, --hooks, --env (M2), --mode onefile (M4),
---trace (M5), --fallback (M7).
+Dependencies (installed as wheels for each target; nothing is built or run):
+  --requirements <file>  use this file instead of the project's declared dependencies
+                         (default: requirements.txt, pyproject.toml, setup.cfg, Pipfile or a
+                         PEP 723 block; else known packages inferred from imports)
+  --package <spec>       add a requirement, e.g. "requests>=2.32" (repeatable)
+  --index-url <url>      package index (default PyPI); --extra-index-url <url> (repeatable)
+  --find-links <dir|url> also look for wheels here (repeatable)
+  --env KEY=VALUE        runtime default baked into the app (repeatable; never secrets)
+  --hooks <dir>          your own package hooks (*.json), see hooks/packages/
+
+Planned (not yet available): --mode onefile (M4), --trace (M5), --fallback (M7).
 Environment: DROPRING_PACK_CACHE, DROPRING_PACK_OFFLINE=1, DROPRING_PACK_RUNTIME_MIRROR, SOURCE_DATE_EPOCH.
 Apps honour DROPRING_PACK_NO_DIALOGS=1 (no error dialogs, e.g. in CI).`;
 
@@ -56,10 +65,13 @@ const FLAG_MAP = {
   '--python': 'python', '--entry': 'entryInProject', '--out': 'out', '-o': 'out', '--launcher-dir': 'launcherDir',
   '--mac-sign': 'macSign', '--mode': 'mode', '--icon': 'icon', '--sign-cmd': 'signCmd', '--company': 'company',
   '--copyright': 'copyright', '--description': 'description', '--requirements': 'requirements', '--hooks': 'hooks',
-  '--env': 'env', '--fallback': 'fallback',
+  '--index-url': 'indexUrl', '--fallback': 'fallback',
 };
 /** Repeatable flags collect into arrays; module lists also accept commas. */
-const LIST_FLAGS = { '--include': ['include', false], '--hidden-import': ['hiddenImports', true], '--exclude-module': ['excludeModules', true] };
+const LIST_FLAGS = {
+  '--include': ['include', false], '--hidden-import': ['hiddenImports', true], '--exclude-module': ['excludeModules', true],
+  '--package': ['packages', false], '--extra-index-url': ['extraIndexUrls', false], '--find-links': ['findLinks', false], '--env': ['env', false],
+};
 const BOOL_FLAGS = { '--windowed': ['windowed', true], '--console': ['windowed', false], '--flat': ['flat', true], '--no-utf8-mode': ['utf8Mode', false], '--json': ['json', true], '--trace': ['trace', true], '--zip': ['zip', true], '--dpi-aware': ['dpiAware', true] };
 
 class UsageError extends Error {}

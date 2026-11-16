@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "package": "CTkMessagebox",
+  "stdlib": [
+    "tkinter"
+  ],
+  "notes": "needs tkinter (Tcl/Tk) from the standard library, which is only bundled when used"
+}
