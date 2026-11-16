@@ -1,5 +1,26 @@
 # dropring-pack status
 
+## M1 — analyzer, branding, GUI apps (2026-11-16)
+
+Fixtures `hello`, `args_exit_code`, `unicode_path`, `stdin_echo`, `gui_tk_window`,
+`windowed_error`; every fixture app is built with the test icon, version 1.2.3, company and
+copyright, so every run also exercises the branded launcher.
+
+### Verified locally (macOS 26.6.2 arm64)
+
+| What | Evidence |
+|---|---|
+| Unit tests | 34 builder tests pass (0.7 s; AST analyzer tests use any Python 3.10+ on PATH), 6 launcher tests |
+| All six fixtures, mac-arm64 | pass (`tests/ci.js native`); `gui_tk_window` opens, maps and closes a Tk 9.0 window (app 37.2 MB with Tcl/Tk vs 29.1 MB without) |
+| All six fixtures, mac-x64 under Rosetta 2 | pass |
+| Finder-style launch | `windowed_error` started through LaunchServices (`open`), wrote `crash.log`, no dialog with `DROPRING_PACK_NO_DIALOGS=1` |
+| Unicode | app "Ünïcode Äpp" moved into `yol ğüşiöç ✓/iç içe`, reads `veri/içerik ✓.txt` added with `--include` |
+| AST analyzer | on a crafted project: type-only, optional, conditional, deferred, `__main__`-guarded and dynamic imports classified correctly; unreachable broken file not parsed; `distutils` reported as removed in 3.12 |
+| macOS branding | `iconutil` accepts `AppIcon.icns` (16–1024 px); Info.plist has icon, version, copyright |
+| Windows branding from a Mac host | resedit read-back: version strings, 7 icon sizes (16–256), DPI-aware manifest keeps UTF-8 code page and long-path setting |
+| Zip | `ditto` unzip keeps the launcher executable and the signature valid; zipped apps run; two zips byte-identical |
+| Bug found and fixed | `codesign` refused to seal bundles whose executable name is non-ASCII ("a sealed resource is missing or invalid"); executables are now ASCII-named |
+
 ## M0 — spike (2026-11-16)
 
 **Acceptance met:** the hello-world app runs on real Windows x64, Windows ARM64, macOS Apple

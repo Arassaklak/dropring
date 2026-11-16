@@ -80,11 +80,12 @@ async function checkBranding(appPath) {
 }
 
 function runFixture(fixture, appPath) {
-  const r = spawnSync(process.execPath, [path.join(__dirname, 'run-fixture.js'), path.join(FIXTURES, fixture), appPath, '--repeat', '5', '--json'], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'run-fixture.js'), path.join(FIXTURES, fixture), appPath, '--repeat', '5', '--json'], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
   try {
-    return JSON.parse(r.stdout.trim().split('\n').pop());
+    return JSON.parse((r.stdout || '').trim().split('\n').pop());
   } catch {
-    return { ok: false, problems: [`runner failed: ${r.stderr || r.stdout}`], firstMs: null, medianMs: null };
+    const how = r.error ? `could not start (${r.error.message})` : r.signal ? `killed by ${r.signal}` : `exited with ${r.status}${r.status > 255 || r.status < 0 ? ` (0x${(r.status >>> 0).toString(16)})` : ''}`;
+    return { ok: false, problems: [`runner ${how}; stderr: ${(r.stderr || '').trim().slice(-800) || '(empty)'}; stdout: ${(r.stdout || '').trim().slice(-400) || '(empty)'}`], firstMs: null, medianMs: null };
   }
 }
 
@@ -108,8 +109,13 @@ function report(title, rows) {
 function unzip(zip, dest) {
   fs.mkdirSync(dest, { recursive: true });
   if (process.platform === 'darwin') execFileSync('/usr/bin/ditto', ['-x', '-k', zip, dest]);
-  else if (process.platform === 'win32') execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:DRP_ZIP -DestinationPath $env:DRP_DEST -Force'], { env: { ...process.env, DRP_ZIP: zip, DRP_DEST: dest } });
-  else execFileSync('unzip', ['-q', zip, '-d', dest]);
+  else if (process.platform === 'win32') {
+    // Windows 10+ ships bsdtar as System32\tar.exe; it reads zips (UTF-8 names) and is much
+    // faster than PowerShell's Expand-Archive, which took minutes for six ~800-file apps.
+    const tarExe = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (fs.existsSync(tarExe)) execFileSync(tarExe, ['-xf', zip, '-C', dest]);
+    else execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:DRP_ZIP -DestinationPath $env:DRP_DEST -Force'], { env: { ...process.env, DRP_ZIP: zip, DRP_DEST: dest } });
+  } else execFileSync('unzip', ['-q', zip, '-d', dest]);
   const entries = fs.readdirSync(dest);
   if (entries.length !== 1) throw new Error(`${zip} should contain exactly one app folder, found ${entries.join(', ')}`);
   return path.join(dest, entries[0]);

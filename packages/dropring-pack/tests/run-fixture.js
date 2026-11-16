@@ -31,6 +31,24 @@ function readManifest(app) {
   throw new Error(`${app}: no dropring-pack manifest found`);
 }
 
+/**
+ * Recursive copy that keeps symlinks. Deliberately not fs.cpSync: its native implementation in
+ * recent Node versions crashed the whole process on Windows for non-ASCII paths (seen in CI).
+ */
+function copyTree(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const ent of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, ent.name);
+    const to = path.join(dest, ent.name);
+    if (ent.isSymbolicLink()) fs.symlinkSync(fs.readlinkSync(from), to);
+    else if (ent.isDirectory()) copyTree(from, to);
+    else {
+      fs.copyFileSync(from, to);
+      fs.chmodSync(to, fs.statSync(from).mode);
+    }
+  }
+}
+
 /** The app folder or .app bundle for an app path or its executable. */
 function appRootOf(p) {
   if (!fs.statSync(p).isFile()) return p;
@@ -121,7 +139,7 @@ function main() {
   if (expected.relocate) {
     relocatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dropring-pack-reloc-'));
     const dest = path.join(relocatedRoot, ...expected.relocate.split('/'), path.basename(appPath));
-    fs.cpSync(appPath, dest, { recursive: true, verbatimSymlinks: true });
+    copyTree(appPath, dest);
     appPath = dest;
   }
   const exe = path.join(appPath, ...manifest.app.executable.split('/'));

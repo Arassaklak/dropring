@@ -5,8 +5,5 @@
   "outputFile": true,
   "exitCode": 0,
   "outputJson": { "frozen": true, "mapped": true, "title": "dropring-pack ✓", "label": "çalışıyor ✓" },
-  "os": {
-    "windows": { "outputJson": { "stdout_is_none": true } },
-    "macos": { "outputJson": { "stdout_is_none": false } }
-  }
+  "note": "stdout_is_none is reported but not asserted: a windowed Windows app has no stdout when started from Explorer, but does when a parent (like this runner) passes pipes. The launcher job checks the GUI subsystem flag in the PE header instead."
 }
