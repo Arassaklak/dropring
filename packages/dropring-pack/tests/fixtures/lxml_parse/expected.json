@@ -1,0 +1,16 @@
+{
+  "description": "lxml (bundled libxml2/libxslt): Unicode XML, XPath, XSLT and HTML parsing; every lxml",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "names": [
+      "ç",
+      "ş"
+    ],
+    "first": "değer ✓",
+    "xslt_count": "2",
+    "html_text": "merhaba dünya",
+    "extensions_loaded": true,
+    "failures": []
+  }
+}

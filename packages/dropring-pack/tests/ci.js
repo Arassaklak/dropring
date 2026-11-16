@@ -24,7 +24,9 @@ const FIXTURES = path.join(__dirname, 'fixtures');
 const VERSION = '1.2.3';
 const COMPANY = 'DropRing Tests';
 const COPYRIGHT = '© 2026 DropRing contributors';
-const fixtureNames = () => fs.readdirSync(FIXTURES).filter((n) => fs.existsSync(path.join(FIXTURES, n, 'expected.json'))).sort();
+// DRP_ONLY=a,b limits the run to some fixtures (local iteration).
+const fixtureNames = () => fs.readdirSync(FIXTURES).filter((n) => fs.existsSync(path.join(FIXTURES, n, 'expected.json')))
+  .filter((n) => !process.env.DRP_ONLY || process.env.DRP_ONLY.split(',').includes(n)).sort();
 const expectedOf = (f) => JSON.parse(fs.readFileSync(path.join(FIXTURES, f, 'expected.json'), 'utf8'));
 const appName = (f) => (expectedOf(f).build && expectedOf(f).build.name) || `DRP ${f}`;
 
@@ -90,6 +92,8 @@ async function checkBranding(appPath) {
     if (b.iconSizes.length !== 7) problems.push(`icon sizes ${b.iconSizes.join(',')}, expected 7 sizes`);
   } else if (process.platform === 'darwin' && appPath.endsWith('.app')) {
     const plist = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', path.join(appPath, 'Contents', 'Info.plist')], { encoding: 'utf8' }));
+    const sig = spawnSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath], { encoding: 'utf8' });
+    if (sig.status !== 0) problems.push(`codesign --verify --deep --strict failed: ${(sig.stderr || '').trim().split('\n').slice(-2).join(' ')}`);
     if (plist.CFBundleIconFile !== 'AppIcon') problems.push('Info.plist has no CFBundleIconFile');
     if (plist.CFBundleShortVersionString !== VERSION) problems.push(`CFBundleShortVersionString = ${plist.CFBundleShortVersionString}`);
     if (plist.NSHumanReadableCopyright !== COPYRIGHT) problems.push('NSHumanReadableCopyright missing');

@@ -1,0 +1,25 @@
+{
+  "description": "Pillow draws, resizes (LANCZOS) and encodes PNG, JPEG and WebP with its bundled codec",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "size": [
+      100,
+      75
+    ],
+    "center_red": true,
+    "encoded": {
+      "PNG": true,
+      "JPEG": true,
+      "WEBP": true
+    },
+    "codecs": {
+      "jpg": true,
+      "zlib": true,
+      "webp": true,
+      "freetype2": true
+    },
+    "extensions_loaded": true,
+    "failures": []
+  }
+}

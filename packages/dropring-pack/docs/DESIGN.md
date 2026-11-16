@@ -1,6 +1,6 @@
 # dropring-pack — design
 
-Status: M2 · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/) · progress and evidence in [STATUS.md](STATUS.md).
+Status: M3 · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/) · progress and evidence in [STATUS.md](STATUS.md).
 
 ## 1. What it is
 
@@ -52,7 +52,7 @@ packages/dropring-pack/
 5. **brand** — icon (PNG/ICO/ICNS, SVG via sharp) rendered by a dependency-free PNG/ICO/ICNS
    toolkit; Windows version info, icon group and optional DPI-aware manifest via `resedit`;
    macOS `AppIcon.icns` + Info.plist keys. `--include SRC=DEST` adds data files.
-6. **sign** — macOS: ad-hoc by default (`codesign` on macOS hosts, `rcodesign` elsewhere, M3);
+6. **sign** — macOS: ad-hoc by default (`codesign` on macOS hosts, `rcodesign` on Linux/Windows);
    Windows: optional `--sign-cmd` template run *after* all PE edits (and after the onefile append).
 7. **verify** — structural checks; `manifest.json` (SBOM) with SHA-256 of every file, runtime and
    launcher provenance. The build never executes user code unless `--trace` is given (M5+).

@@ -253,12 +253,12 @@ async function assembleOnedir(o) {
     // 8. Sign
     if (target.os === 'macos') {
       if (o.macSign === 'none') emit({ type: 'stage', stage: 'sign', ...tag, message: 'skipped (--mac-sign none)' });
-      else if (process.platform === 'darwin') {
+      else if (macos.macSigner(o.env) === 'codesign') {
         emit({ type: 'stage', stage: 'sign', ...tag, message: 'ad-hoc signing with codesign' });
         await macos.codesignAdhoc(stage);
       } else {
-        emit({ type: 'stage', stage: 'sign', ...tag, message: 'not sealed on this host' });
-        warn('the .app bundle is not sealed on this host (rcodesign support arrives in M3); its Mach-O files keep their original ad-hoc signatures, which is enough to run on Apple Silicon');
+        emit({ type: 'stage', stage: 'sign', ...tag, message: 'ad-hoc signing with rcodesign' });
+        await macos.rcodesignAdhoc(stage, { env: o.env || process.env, cacheDir: o.cacheDir, signal });
       }
     } else if (o.signCmd) {
       emit({ type: 'stage', stage: 'sign', ...tag, message: `signing ${path.basename(exePath)} with --sign-cmd (command not shown)` });

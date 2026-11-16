@@ -4,7 +4,8 @@ Turns a Python script or project into a standalone **Windows app folder (`.exe`)
 `.app`** — from any build machine, without Python installed on either side, and without
 PyInstaller. Part of [DropRing](../../README.md); usable on its own as a CLI and Node library.
 
-> Status: **M2**. Apps with third-party packages (installed as wheels for each target, hash-checked),
+> Status: **M3**. Apps with third-party packages, including native ones such as numpy, pandas,
+> Pillow, cryptography and lxml (installed as wheels for each target, hash-checked),
 > onedir output, Windows x64/ARM64 and macOS arm64/x64, icons and version info, GUI (tkinter)
 > apps, data files, zips. Onefile (M4) and the DropRing ring action (M6) are not there yet.
 > Design: [docs/DESIGN.md](docs/DESIGN.md), decisions: [docs/adr/](docs/adr/), evidence:
@@ -62,7 +63,7 @@ Environment: `DROPRING_PACK_CACHE` (cache folder), `DROPRING_PACK_OFFLINE=1` (ne
 
 ## Unsigned apps
 
-macOS apps are ad-hoc signed. Downloaded copies show a Gatekeeper warning on first start
+macOS apps are ad-hoc signed (with Apple's `codesign` on a Mac, with `rcodesign` on Linux/Windows). Downloaded copies show a Gatekeeper warning on first start
 (*System Settings → Privacy & Security → Open Anyway*); Developer ID signing and notarization are
 planned (M3). Windows apps are unsigned unless you pass `--sign-cmd "signtool sign /fd sha256 /a {file}"`
 (or any signing tool); unsigned apps may get a SmartScreen warning.

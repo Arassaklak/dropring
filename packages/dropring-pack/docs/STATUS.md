@@ -1,5 +1,23 @@
 # dropring-pack status
 
+## M3 — native packages, cross-target, signing from any host (2026-11-16)
+
+New fixtures `numpy_basic`, `pillow_resize`, `cryptography_hash`, `lxml_parse`,
+`pandas_small`: each does real work and imports **every compiled extension module** its
+package ships (`.so`/`.pyd`), reporting any that fail to load.
+
+### Verified locally (macOS 26.6.2 arm64)
+
+| What | Evidence |
+|---|---|
+| Wheel coverage | all five packages resolve for win-x64, win-arm64, mac-arm64, mac-x64 on Python 3.14, 3.10 (no win-arm64 runtime) and 3.15 |
+| Version skew found | the newest cryptography with wheels is 50.0.2 for win-x64/mac-arm64, 46.0.3 for win-arm64, 48.0.1 for mac-x64; builds now warn when a package resolves to different versions per target |
+| All 18 fixtures, mac-arm64 | pass; every extension module of numpy, pandas, cryptography and lxml loads; Pillow's too except `PIL._imagingtk`, its tkinter bridge, which needs tkinter (bundled when the app imports tkinter) |
+| rcodesign | 0.29.0 downloaded and hash-checked; its ad-hoc signature passes Apple's `codesign --verify --deep --strict`; the signed app runs |
+| Cross-build from this Mac | all five M3 apps build for win-x64 and win-arm64 (running them on Windows happens in CI) |
+| Sizes (mac-arm64) | numpy 62.7 MB, pandas 106.4 MB (pandas ships an 18 MB test suite: an M7 trimming candidate), Pillow 40.5 MB, cryptography 40.5 MB, lxml 48.2 MB |
+| Unit tests | 47 pass |
+
 ## M2 — third-party dependencies (2026-11-16)
 
 New fixtures: `deps_requests` (requirements.txt), `deps_rich` (PEP 723), `deps_pydantic`

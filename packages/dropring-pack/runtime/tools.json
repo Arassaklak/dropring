@@ -37,5 +37,44 @@
         "size": 16682639
       }
     }
+  },
+  "rcodesign": {
+    "version": "0.29.0",
+    "released": "2024-11-29",
+    "repository": "https://github.com/indygreg/apple-platform-rs",
+    "note": "apple-codesign (rcodesign): ad-hoc signing of macOS apps on Linux and Windows build hosts. SHA-256 values from the release .sha256 files. Windows ARM64 hosts run the x64 build under emulation.",
+    "urlTemplate": "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F{version}/{file}",
+    "assets": {
+      "x86_64-unknown-linux-gnu": {
+        "file": "apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
+        "size": 10704555
+      },
+      "aarch64-unknown-linux-gnu": {
+        "file": "apple-codesign-0.29.0-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f",
+        "size": 10274948
+      },
+      "x86_64-pc-windows-msvc": {
+        "file": "apple-codesign-0.29.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "54bb500e2da7a8de02fcae0f331d1cac6e6d7173b4281042ff9c528ba3159aaa",
+        "size": 8552693
+      },
+      "aarch64-pc-windows-msvc": {
+        "file": "apple-codesign-0.29.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "54bb500e2da7a8de02fcae0f331d1cac6e6d7173b4281042ff9c528ba3159aaa",
+        "size": 8552693
+      },
+      "aarch64-apple-darwin": {
+        "file": "apple-codesign-0.29.0-macos-universal.tar.gz",
+        "sha256": "d98372d5524226ccf9dc0eda03d4e4f5826182dabb2fc3f2bd303ed9113a748d",
+        "size": 19441455
+      },
+      "x86_64-apple-darwin": {
+        "file": "apple-codesign-0.29.0-macos-universal.tar.gz",
+        "sha256": "d98372d5524226ccf9dc0eda03d4e4f5826182dabb2fc3f2bd303ed9113a748d",
+        "size": 19441455
+      }
+    }
   }
 }

@@ -150,6 +150,7 @@ async function build(options, onEvent = () => {}) {
   const uv = deps.hasWork(plan) ? await ensureUv({ env, cacheDir, signal: o.signal }) : null;
   if (uv && !analysis.pythonExe) throw new Error('installing dependencies needs a Python runtime for this computer, which is not available here');
   const temps = [];
+  const versionsByPackage = new Map(); // normalised name -> Map(version -> [target ids])
 
   const artifacts = [];
   try {
@@ -172,6 +173,12 @@ async function build(options, onEvent = () => {}) {
       const uvenv = deps.uvEnv(cacheDir, env);
       const resolved = await deps.resolve({ uv, plan, target, minor: runtime.minor, workDir: work, options: o, env: uvenv, signal: o.signal });
       emit({ type: 'log', level: 'info', ...tag, message: `${resolved.packages.length} package(s): ${resolved.packages.map((p) => `${p.name} ${p.version}`).join(', ')}` });
+      for (const p of resolved.packages) {
+        const key = deps.normalize(p.name);
+        if (!versionsByPackage.has(key)) versionsByPackage.set(key, new Map());
+        const byVersion = versionsByPackage.get(key);
+        byVersion.set(p.version, [...(byVersion.get(p.version) || []), target.id]);
+      }
       sitePackages = path.join(work, 'site-packages');
       await deps.install({ uv, lockFile: resolved.lockFile, siteDir: sitePackages, python: analysis.pythonExe, target, minor: runtime.minor, options: o, env: uvenv, signal: o.signal });
       ({ distributions, provided } = await deps.verifyAndClean(sitePackages));
@@ -204,7 +211,7 @@ async function build(options, onEvent = () => {}) {
 
     const destDir = o.flat ? outDir : path.join(outDir, target.id);
     const artifact = await assembleOnedir({
-      target, runtime, runtimeRoot: fetched.root, launcher, analysis, app, destDir, macSign, emit, signal: o.signal, env,
+      target, runtime, runtimeRoot: fetched.root, launcher, analysis, app, destDir, macSign, emit, signal: o.signal, env, cacheDir,
       sitePackages, keepTkinter: analysis.usesTkinter || hookResult.keepTkinter, appEnv: { ...hookResult.env, ...bakedEnv },
       dependencies: { source: plan.source, distributions, hooks: hookResult.applied.map((h) => h.package) },
       icon: icon && { ico: target.os === 'windows' ? icon.ico() : null, icns: target.os === 'macos' ? icon.icns() : null, sha256: icon.sha256 },
@@ -216,6 +223,7 @@ async function build(options, onEvent = () => {}) {
   } finally {
     for (const t of temps) await fs.promises.rm(t, { recursive: true, force: true });
   }
+  for (const message of versionSkew(versionsByPackage)) emit({ type: 'warning', message });
   const manifest = artifacts.map((a) => JSON.parse(fs.readFileSync(a.manifestPath, 'utf8')));
   return { artifacts, manifest, warnings };
 }
@@ -233,6 +241,20 @@ async function prepareIcon(file, targets, emit) {
     icns: () => (icns || (icns = makeIcns(loaded.image))),
     targets,
   };
+}
+
+/**
+ * Packages that resolved to different versions on different targets: uv picks the newest
+ * version with a wheel for each target, which is not always the same release everywhere.
+ */
+function versionSkew(versionsByPackage) {
+  const out = [];
+  for (const [name, byVersion] of versionsByPackage) {
+    if (byVersion.size < 2) continue;
+    const list = [...byVersion].map(([v, ts]) => `${v} (${ts.join(', ')})`).join(', ');
+    out.push(`${name} resolved to different versions per target: ${list}; the newest version with wheels differs by platform. Pin one version in your requirements if the apps must behave identically`);
+  }
+  return out;
 }
 
 /** --env KEY=VALUE pairs (or an object) → {KEY: VALUE}. Values end up inside the app: never secrets. */
@@ -263,4 +285,4 @@ function defaultName(analysis) {
   return ['main', 'app', '__main__'].includes(stem.toLowerCase()) ? path.basename(analysis.root) : stem;
 }
 
-module.exports = { build, listRuntimes, TARGETS, hostTargetId, VERSION };
+module.exports = { build, listRuntimes, TARGETS, hostTargetId, VERSION, versionSkew };

@@ -1,7 +1,7 @@
 # dropring-pack (packages/dropring-pack): builds the native launcher for every target, packages
 # the test fixtures as real (branded) apps and runs them on Windows x64/ARM64 and macOS Apple
 # Silicon/Intel runners — apps built on the runner itself, and apps cross-assembled on a Linux
-# runner, shipped as zips and unzipped with each OS's own tool.
+# runner (Mac apps signed there with rcodesign), shipped as zips and unzipped with each OS's own tool.
 name: dropring-pack
 
 on:
@@ -162,8 +162,26 @@ jobs:
         run: node tests/ci.js cross-build --targets win-x64,win-arm64,mac-arm64,mac-x64 --launcher-dir dist-launchers --out cross
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cross-apps
-          path: packages/dropring-pack/cross/*/*.zip
+          name: cross-apps-win-x64
+          path: packages/dropring-pack/cross/win-x64/*.zip
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cross-apps-win-arm64
+          path: packages/dropring-pack/cross/win-arm64/*.zip
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cross-apps-mac-arm64
+          path: packages/dropring-pack/cross/mac-arm64/*.zip
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cross-apps-mac-x64
+          path: packages/dropring-pack/cross/mac-x64/*.zip
           if-no-files-found: error
           retention-days: 3
 
@@ -190,7 +208,7 @@ jobs:
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: cross-apps
-          path: packages/dropring-pack/cross
+          name: cross-apps-${{ matrix.target }}
+          path: packages/dropring-pack/cross/${{ matrix.target }}
       - name: Unzip and run fixtures
         run: node tests/ci.js run --target ${{ matrix.target }} --zips "cross/${{ matrix.target }}"

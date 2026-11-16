@@ -100,4 +100,19 @@ async function codesignAdhoc(appPath) {
   await run('/usr/bin/codesign', ['--verify', '--strict', '--verbose=2', appPath]);
 }
 
-module.exports = { infoPlist, machoMinOs, machoMinOsOfFile, compareVersions, codesignAdhoc };
+/**
+ * Ad-hoc signs the bundle with rcodesign (apple-codesign), which runs on Linux and Windows.
+ * Without a certificate rcodesign signs ad-hoc; it signs nested Mach-O files and seals resources.
+ */
+async function rcodesignAdhoc(appPath, opts) {
+  const rcodesign = await require('./tools').ensureTool('rcodesign', opts);
+  await run(rcodesign, ['sign', appPath]);
+}
+
+/** Which signer a macOS target gets on this host. */
+function macSigner(env = process.env) {
+  if (env.DROPRING_PACK_MAC_SIGNER) return env.DROPRING_PACK_MAC_SIGNER; // 'codesign' | 'rcodesign'
+  return process.platform === 'darwin' ? 'codesign' : 'rcodesign';
+}
+
+module.exports = { infoPlist, machoMinOs, machoMinOsOfFile, compareVersions, codesignAdhoc, rcodesignAdhoc, macSigner };

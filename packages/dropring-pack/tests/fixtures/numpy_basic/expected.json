@@ -1,0 +1,13 @@
+{
+  "description": "numpy with its compiled core, BLAS/LAPACK (bundled OpenBLAS), FFT and random; every numpy",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "det": -2.0,
+    "solve_ok": true,
+    "fft_ok": true,
+    "random_ok": true,
+    "extensions_loaded": true,
+    "failures": []
+  }
+}

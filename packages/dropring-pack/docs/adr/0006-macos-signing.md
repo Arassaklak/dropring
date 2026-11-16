@@ -1,6 +1,6 @@
 # ADR-0006: macOS signing — ad-hoc by default, codesign on Macs, rcodesign elsewhere
 
-Status: accepted (M0 for macOS hosts; non-Mac hosts in M3)
+Status: accepted; ad-hoc signing implemented for macOS hosts (M0) and Linux/Windows hosts via rcodesign 0.29.0 (M3)
 
 ## Context
 
@@ -12,10 +12,12 @@ downloaded apps but needs the user's Apple credentials.
 
 - **Default: ad-hoc** (`--mac-sign adhoc`). On a macOS host: `codesign --force --sign -` on every
   Mach-O we placed (bottom-up), then on the `.app` to seal `Info.plist` and resources.
-- **Non-Mac hosts (M3):** `rcodesign` from apple-platform-rs (pinned 0.29.0 + SHA-256), same
-  order. Until then, cross-assembled macOS apps rely on the linker signatures already present in
-  the launcher and python-build-standalone binaries (we do not modify those files), and the build
-  log says the bundle itself is unsealed.
+- **Non-Mac hosts:** `rcodesign sign <app>` from apple-platform-rs (pinned 0.29.0 + SHA-256 from
+  the release's .sha256 files; Windows ARM64 hosts run the x64 build). Without a certificate it
+  signs ad-hoc, signs the nested Mach-O files and seals the resources. Verified on a Mac
+  (2026-11-16): Apple's `codesign --verify --deep --strict` accepts an rcodesign-signed bundle
+  ("valid on disk", "satisfies its Designated Requirement", 732 sealed resources) and the app
+  runs. `DROPRING_PACK_MAC_SIGNER=rcodesign` forces it on a Mac for such checks.
 - **Developer ID** (`--mac-sign identity:<name>`): hardened runtime, secure timestamp,
   entitlements file (defaults: none; `allow-jit`/`disable-library-validation` only when a hook
   asks), then optional notarization via `xcrun notarytool submit --wait` + `stapler staple`

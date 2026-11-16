@@ -1,0 +1,12 @@
+{
+  "description": "cryptography (Rust extension with its own OpenSSL): SHA-256, Fernet and Ed25519; every",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "sha256_matches": true,
+    "fernet_roundtrip": true,
+    "ed25519_ok": true,
+    "extensions_loaded": true,
+    "failures": []
+  }
+}

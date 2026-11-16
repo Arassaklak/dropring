@@ -1,0 +1,15 @@
+{
+  "description": "pandas (+ numpy, tzdata, dateutil): DataFrame, groupby, CSV round trip and time zones; every",
+  "entry": "main.py",
+  "exitCode": 0,
+  "stdoutJson": {
+    "total": {
+      "Ankara": 20,
+      "İzmir": 15
+    },
+    "rows": 3,
+    "tz": "Europe/Istanbul",
+    "extensions_loaded": true,
+    "failures": []
+  }
+}
