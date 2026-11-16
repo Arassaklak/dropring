@@ -1,0 +1,12 @@
+{
+  "description": "tkinter (bundled Tcl/Tk) opens a window, shows it and closes; windowed build",
+  "entry": "main.py",
+  "build": { "windowed": true },
+  "outputFile": true,
+  "exitCode": 0,
+  "outputJson": { "frozen": true, "mapped": true, "title": "dropring-pack ✓", "label": "çalışıyor ✓" },
+  "os": {
+    "windows": { "outputJson": { "stdout_is_none": true } },
+    "macos": { "outputJson": { "stdout_is_none": false } }
+  }
+}

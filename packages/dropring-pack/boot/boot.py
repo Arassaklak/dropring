@@ -86,12 +86,92 @@ def _serve_multiprocessing_child(argv):
     return False
 
 
+def _setup_tcl_tk(runtime_dir):
+    """Point Tcl/Tk at the bundled script libraries (macOS/Linux).
+
+    The Windows build of _tkinter finds them under sys.base_prefix by itself; elsewhere Tcl
+    would look next to the executable, which is the launcher. Only set when tkinter is bundled.
+    """
+    if sys.platform == "win32":
+        return
+    lib = os.path.join(runtime_dir, "lib")
+    try:
+        names = os.listdir(lib)
+    except OSError:
+        return
+    for var, prefix in (("TCL_LIBRARY", "tcl"), ("TK_LIBRARY", "tk")):
+        for name in sorted(names, reverse=True):
+            version = name[len(prefix):]
+            if name.startswith(prefix) and version[:1].isdigit() and "." in version and os.path.isdir(os.path.join(lib, name)):
+                os.environ[var] = os.path.join(lib, name)
+                break
+
+
+def _gui_launch(info):
+    """True when the user cannot see stderr: a windowed Windows app or a Finder-launched macOS app."""
+    if sys.platform == "win32":
+        return info.get("subsystem") == "windowed"
+    if sys.platform == "darwin":
+        try:
+            return os.getppid() == 1 and not (sys.stderr is not None and sys.stderr.isatty())
+        except (OSError, ValueError):
+            return False
+    return False
+
+
+def _report_crash(exc_type, exc, tb):
+    """Save the traceback to a crash log and, unless disabled, show it in a native dialog."""
+    import traceback
+
+    info = getattr(sys, "_dropring_pack", None) or {}
+    name = info.get("name") or "This application"
+    text = "".join(traceback.format_exception(exc_type, exc, tb))
+    log_path = None
+    try:
+        import dropring_pack_runtime
+
+        log_path = os.path.join(dropring_pack_runtime.user_data_dir(), "crash.log")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception:
+        log_path = None
+    if os.environ.get("DROPRING_PACK_NO_DIALOGS"):
+        return
+    tail = "\n".join(text.strip().splitlines()[-18:])
+    message = "%s stopped because of an unexpected error.\n\n%s" % (name, tail)
+    if log_path:
+        message += "\n\nDetails were saved to:\n" + log_path
+    _show_dialog(name, message)
+
+
+def _show_dialog(title, message):
+    try:
+        import ctypes
+
+        if sys.platform == "win32":
+            MB_ICONERROR, MB_SETFOREGROUND = 0x10, 0x10000
+            ctypes.windll.user32.MessageBoxW(None, message, title, MB_ICONERROR | MB_SETFOREGROUND)
+        elif sys.platform == "darwin":
+            cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+            cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+            cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+            cf.CFUserNotificationDisplayAlert.argtypes = [ctypes.c_double, ctypes.c_ulong] + [ctypes.c_void_p] * 8 + [ctypes.POINTER(ctypes.c_ulong)]
+            utf8 = 0x08000100
+            header = cf.CFStringCreateWithCString(None, title.encode("utf-8"), utf8)
+            body = cf.CFStringCreateWithCString(None, message.encode("utf-8"), utf8)
+            response = ctypes.c_ulong()
+            cf.CFUserNotificationDisplayAlert(0.0, 0, None, None, None, header, body, None, None, None, ctypes.byref(response))
+    except Exception:
+        pass
+
+
 def _excepthook(exc_type, exc, tb):
     """Hide this bootstrap's frames from tracebacks of the application.
 
     Frames are only removed when application frames remain, so errors inside the
     bootstrap itself stay visible. The trimmed traceback is stored on the exception
     because CPython 3.13+ prints ``exc.__traceback__`` and ignores the ``tb`` argument.
+    In GUI launches the error is also saved and shown, because stderr is invisible there.
     """
     trimmed = tb
     while trimmed is not None and trimmed.tb_frame.f_code.co_filename == _BOOT_FILE:
@@ -101,6 +181,11 @@ def _excepthook(exc_type, exc, tb):
         if exc is not None:
             exc.__traceback__ = tb
     sys.__excepthook__(exc_type, exc, tb)
+    if _GUI_LAUNCH and not issubclass(exc_type, KeyboardInterrupt):
+        _report_crash(exc_type, exc, tb)
+
+
+_GUI_LAUNCH = False
 
 
 def _run_entry(path):
@@ -125,11 +210,14 @@ def _run_entry(path):
 
 
 def _main():
+    global _GUI_LAUNCH
     _restore_environment()
     pack_dir = os.path.dirname(os.path.abspath(_BOOT_FILE))
     base_dir = os.path.dirname(pack_dir)
     app_dir = os.path.join(base_dir, "app")
     info = _read_app_info(pack_dir)
+    _GUI_LAUNCH = _gui_launch(info)
+    _setup_tcl_tk(os.path.join(base_dir, "python"))
 
     sys.frozen = True
     sys._dropring_pack = {

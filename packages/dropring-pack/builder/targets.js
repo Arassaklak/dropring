@@ -26,6 +26,19 @@ function hostTargetId(platform = process.platform, arch = process.arch) {
 }
 
 /**
+ * python-build-standalone triple of the machine we run on (also Linux, which is a build host
+ * but not yet a target). Used for the tools the builder itself runs, like the analyzer.
+ */
+function hostTriple(platform = process.platform, arch = process.arch) {
+  const table = {
+    'darwin-arm64': 'aarch64-apple-darwin', 'darwin-x64': 'x86_64-apple-darwin',
+    'win32-x64': 'x86_64-pc-windows-msvc', 'win32-arm64': 'aarch64-pc-windows-msvc',
+    'linux-x64': 'x86_64-unknown-linux-gnu', 'linux-arm64': 'aarch64-unknown-linux-gnu',
+  };
+  return table[`${platform}-${arch}`] || null;
+}
+
+/**
  * Parses a comma-separated target list. Accepts ids, 'host' and 'all'.
  * @param {string|string[]|undefined} spec
  * @returns {Target[]}
@@ -48,4 +61,4 @@ function parseTargets(spec) {
   return out;
 }
 
-module.exports = { TARGETS, hostTargetId, parseTargets };
+module.exports = { TARGETS, hostTargetId, hostTriple, parseTargets };

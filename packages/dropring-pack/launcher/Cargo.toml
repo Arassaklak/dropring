@@ -1,6 +1,6 @@
 [package]
 name = "dropring-pack-launcher"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Tiny native launcher for applications built with dropring-pack"

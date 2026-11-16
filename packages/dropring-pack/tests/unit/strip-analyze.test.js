@@ -52,7 +52,7 @@ test('analyze: single file pulls in local modules and packages, detects tkinter'
     'pkg/__pycache__/sub.cpython-314.pyc': 'x',
     'unrelated.py': '',
   });
-  const a = await analyze(path.join(dir, 'main.py'));
+  const a = await analyze(path.join(dir, 'main.py'), { textOnly: true });
   assert.equal(a.mode, 'file');
   assert.deepEqual(a.files, ['helper.py', 'main.py', 'pkg/__init__.py', 'pkg/data.json', 'pkg/sub.py']);
   assert.equal(a.usesTkinter, true);
@@ -65,13 +65,13 @@ test('analyze: project folder copies the tree, skips caches, venvs and .env', as
     'app.py': 'print(1)\n', 'lib/util.py': '', 'assets/logo.txt': 'x', '.env': 'SECRET=1', '.venv/bin/python': 'x',
     '.git/HEAD': 'x', '__pycache__/app.cpython-314.pyc': 'x', 'notes.md': 'x', 'dist/old.txt': 'x',
   });
-  const a = await analyze(dir, { exclude: [path.join(dir, 'out')] });
+  const a = await analyze(dir, { exclude: [path.join(dir, 'out')], textOnly: true });
   assert.equal(a.mode, 'project');
   assert.equal(a.entry, 'app.py');
   assert.deepEqual(a.files, ['app.py', 'assets/logo.txt', 'lib/util.py', 'notes.md']);
   assert.ok(a.warnings.some((w) => w.includes('.env')));
   assert.equal(a.usesTkinter, false);
-  await assert.rejects(analyze(path.join(dir, 'lib')), /no entry script/);
-  await assert.rejects(analyze(path.join(dir, 'notes.md')), /expected a \.py file/);
+  await assert.rejects(analyze(path.join(dir, 'lib'), { textOnly: true }), /no entry script/);
+  await assert.rejects(analyze(path.join(dir, 'notes.md'), { textOnly: true }), /expected a \.py file/);
   assert.equal(skipReason('node_modules', true), 'tooling or cache folder');
 });

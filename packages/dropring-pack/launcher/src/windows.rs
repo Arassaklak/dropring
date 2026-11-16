@@ -81,7 +81,7 @@ fn load_entry(library: &Path) -> Result<PyMain, String> {
 
 pub fn report_error(windowed: bool, message: &str) {
     let text = format!("dropring-pack launcher {}: {message}", crate::VERSION);
-    if windowed {
+    if windowed && crate::dialogs_allowed() {
         let caption = wide(OsStr::new("Application error"));
         let body = wide(OsStr::new(&text));
         // SAFETY: both strings are NUL-terminated and outlive the call; no owner window.

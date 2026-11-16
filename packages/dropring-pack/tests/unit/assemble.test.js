@@ -6,13 +6,15 @@ const path = require('path');
 const { assembleOnedir, launcherConfig } = require('../../builder/assemble');
 const { analyze } = require('../../builder/analyze');
 const { TARGETS } = require('../../builder/targets');
-const { tmpdir, writeFiles, fakeRuntime, RUNTIME_SPEC } = require('./helpers');
+const { tmpdir, writeFiles, fakeRuntime, fakePeLauncher, RUNTIME_SPEC } = require('./helpers');
+const { readBranding } = require('../../builder/windows');
 
 async function setup(t, os_) {
   const dir = tmpdir(t);
   const runtimeRoot = fakeRuntime(path.join(dir, 'rt'), os_);
   writeFiles(dir, { 'src/main.py': 'import helper\nprint("hi")\n', 'src/helper.py': '', 'launcher.bin': 'LAUNCHER' });
-  const analysis = await analyze(path.join(dir, 'src', 'main.py'));
+  if (os_ === 'windows') await fakePeLauncher(path.join(dir, 'launcher.bin'));
+  const analysis = await analyze(path.join(dir, 'src', 'main.py'), { textOnly: true });
   const events = [];
   const opts = (destDir) => ({
     target: TARGETS[os_ === 'windows' ? 'win-x64' : 'mac-x64'],
@@ -37,7 +39,10 @@ test('Windows onedir layout, launcher config and ._pth', async (t) => {
   const root = path.join(dir, 'out', 'My App');
   assert.equal(a.path, root);
   assert.equal(a.executable, path.join(root, 'My App.exe'));
-  assert.equal(read(root, 'My App.exe'), 'LAUNCHER');
+  const branding = await readBranding(path.join(root, 'My App.exe'));
+  assert.equal(branding.strings.ProductName, 'My App');
+  assert.equal(branding.strings.FileVersion, '1.2.3');
+  assert.equal(branding.strings.OriginalFilename, 'My App.exe');
   const base = path.join(root, '_internal');
   assert.equal(read(base, 'python', 'python314._pth').split('\n').slice(1).join('\n'), 'Lib\nDLLs\nimport site\n');
   assert.equal(read(base, 'dropring-pack.cfg'), launcherConfig({ target: TARGETS['win-x64'], runtime: RUNTIME_SPEC, layout: { lib: 'python314.dll' }, utf8Mode: true }));

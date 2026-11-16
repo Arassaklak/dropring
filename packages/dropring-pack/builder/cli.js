@@ -26,7 +26,19 @@ Build options:
   --version <x.y.z>      numeric version (default 1.0.0)
   --python <3.x>         runtime version (default ${listRuntimes().find((r) => r.default).minor})
   --entry <file>         entry script inside a project folder
-  --windowed | --console GUI app without a console window on Windows (default: console)
+  --windowed | --console GUI app without a console window on Windows (default: console;
+                         a GUI toolkit import prints a hint)
+  --icon <file>          .png (512px+ recommended), .ico, .icns or .svg (SVG needs sharp)
+  --company <text>       Windows version info: CompanyName
+  --copyright <text>     Windows LegalCopyright and macOS NSHumanReadableCopyright
+  --description <text>   Windows FileDescription (default: the name)
+  --dpi-aware            Windows: per-monitor DPI-aware manifest (sharp GUI on high-DPI screens)
+  --include SRC=DEST     extra files: SRC file/folder/glob relative to the project folder,
+                         DEST folder inside the app ('.' = next to the entry script); repeatable
+  --hidden-import <mod>  bundle a module no import statement mentions (repeatable, comma list)
+  --exclude-module <mod> ignore an import that is never reached (repeatable, comma list)
+  --sign-cmd "<cmd>"     Windows: sign the .exe with your tool, {file} = path of the .exe
+  --zip                  also write <name>-<version>-<target>.zip (keeps permissions)
   --out <dir>            output folder (default: dist); apps go to <dir>/<target>/
   --flat                 single target: put the app directly into --out
   --launcher-dir <dir>   prebuilt launchers: <dir>/<target>/dropring-pack-<console|windowed>[.exe]
@@ -34,18 +46,21 @@ Build options:
   --no-utf8-mode         do not enable Python UTF-8 mode in the app
   --json                 machine-readable events, one JSON object per line
 
-Planned (not yet available): --mode onefile (M4), --icon, --include, --sign-cmd, --zip (M1),
---requirements, --hidden-import, --exclude-module, --hooks, --env (M2), --trace (M5), --fallback (M7).
-Environment: DROPRING_PACK_CACHE, DROPRING_PACK_OFFLINE=1, DROPRING_PACK_RUNTIME_MIRROR, SOURCE_DATE_EPOCH.`;
+Planned (not yet available): --requirements, --hooks, --env (M2), --mode onefile (M4),
+--trace (M5), --fallback (M7).
+Environment: DROPRING_PACK_CACHE, DROPRING_PACK_OFFLINE=1, DROPRING_PACK_RUNTIME_MIRROR, SOURCE_DATE_EPOCH.
+Apps honour DROPRING_PACK_NO_DIALOGS=1 (no error dialogs, e.g. in CI).`;
 
 const FLAG_MAP = {
   '--target': 'targets', '--targets': 'targets', '--name': 'name', '--app-id': 'appId', '--version': 'version',
   '--python': 'python', '--entry': 'entryInProject', '--out': 'out', '-o': 'out', '--launcher-dir': 'launcherDir',
-  '--mac-sign': 'macSign', '--mode': 'mode', '--icon': 'icon', '--include': 'include', '--sign-cmd': 'signCmd',
-  '--requirements': 'requirements', '--hidden-import': 'hiddenImport', '--exclude-module': 'excludeModule',
-  '--hooks': 'hooks', '--env': 'env', '--fallback': 'fallback',
+  '--mac-sign': 'macSign', '--mode': 'mode', '--icon': 'icon', '--sign-cmd': 'signCmd', '--company': 'company',
+  '--copyright': 'copyright', '--description': 'description', '--requirements': 'requirements', '--hooks': 'hooks',
+  '--env': 'env', '--fallback': 'fallback',
 };
-const BOOL_FLAGS = { '--windowed': ['windowed', true], '--console': ['windowed', false], '--flat': ['flat', true], '--no-utf8-mode': ['utf8Mode', false], '--json': ['json', true], '--trace': ['trace', true], '--zip': ['zip', true] };
+/** Repeatable flags collect into arrays; module lists also accept commas. */
+const LIST_FLAGS = { '--include': ['include', false], '--hidden-import': ['hiddenImports', true], '--exclude-module': ['excludeModules', true] };
+const BOOL_FLAGS = { '--windowed': ['windowed', true], '--console': ['windowed', false], '--flat': ['flat', true], '--no-utf8-mode': ['utf8Mode', false], '--json': ['json', true], '--trace': ['trace', true], '--zip': ['zip', true], '--dpi-aware': ['dpiAware', true] };
 
 class UsageError extends Error {}
 
@@ -59,6 +74,11 @@ function parseArgs(argv) {
       const value = eq > 0 ? a.slice(eq + 1) : argv[++i];
       if (value === undefined) throw new UsageError(`${flag} needs a value`);
       opts[FLAG_MAP[flag]] = value;
+    } else if (LIST_FLAGS[flag]) {
+      const value = eq > 0 ? a.slice(eq + 1) : argv[++i];
+      if (value === undefined) throw new UsageError(`${flag} needs a value`);
+      const [key, commas] = LIST_FLAGS[flag];
+      opts[key] = [...(opts[key] || []), ...(commas ? value.split(',').map((s) => s.trim()).filter(Boolean) : [value])];
     } else if (BOOL_FLAGS[flag]) {
       const [key, value] = BOOL_FLAGS[flag];
       opts[key] = value;
@@ -75,7 +95,7 @@ function humanReporter() {
     const prefix = e.target ? `[${e.target}] ` : '';
     if (e.type === 'stage') console.log(`${prefix}${e.stage.padEnd(8)} ${e.message || ''}`);
     else if (e.type === 'warning') console.warn(`${prefix}warning: ${e.message}`);
-    else if (e.type === 'progress') { if (e.value === 1 || Math.round(e.value * 100) % 25 === 0) console.log(`${prefix}fetch    ${Math.round(e.value * 100)}% of ${(e.total / 1048576).toFixed(1)} MB`); }
+    else if (e.type === 'progress') { if (e.value === 1 || Math.round(e.value * 100) % 25 === 0) console.log(`${prefix}${e.stage.padEnd(8)} ${Math.round(e.value * 100)}% of ${(e.total / 1048576).toFixed(1)} MB${e.message ? ` (${e.message})` : ''}`); }
     else if (e.type === 'log' && (e.level !== 'debug' || process.env.DROPRING_PACK_DEBUG)) console.log(`${prefix}${e.message}`);
   };
 }
@@ -148,6 +168,9 @@ function cmdInspect(opts) {
   console.log(`${m.app.name} ${m.app.version} (${m.app.appId}) — ${m.target.id}, ${m.app.mode}, ${m.app.subsystem}`);
   console.log(`engine: ${m.engine} ${m.generatorVersion}; Python ${m.python.version} (python-build-standalone ${m.python.release}, archive ${m.python.archiveSha256.slice(0, 16)}…)`);
   console.log(`launcher: ${m.launcher.kind} ${m.launcher.version}, sha256 ${m.launcher.sha256}`);
+  if (m.analysis && m.analysis.analyzer) console.log(`analysis: ${m.analysis.analyzer === 'ast' ? `AST (Python ${m.analysis.analyzerPython})` : 'text scan'}, ${m.analysis.imports.length} modules${m.analysis.gui && m.analysis.gui.length ? `, GUI: ${m.analysis.gui.join(', ')}` : ''}`);
+  if (m.branding) console.log(`branding: icon ${m.branding.icon ? m.branding.icon.slice(0, 16) + '…' : 'none'}${m.branding.company ? `, company "${m.branding.company}"` : ''}${m.branding.dpiAware ? ', DPI-aware' : ''}`);
+  if (m.includes && m.includes.length) console.log(`included files: ${m.includes.length}`);
   console.log(`files: ${m.totals.count}, ${(m.totals.bytes / 1048576).toFixed(1)} MB (without the executable)`);
   for (const [k, v] of [...groups].sort((a, b) => b[1] - a[1]).slice(0, 12)) console.log(`  ${(v / 1048576).toFixed(2).padStart(7)} MB  ${k}`);
 }

@@ -1,0 +1,8 @@
+{
+  "description": "Piped UTF-8 stdin reaches the app; stdout and stderr stay separate",
+  "entry": "main.py",
+  "stdin": "merhaba dünya ✓\nikinci satır\n",
+  "exitCode": 0,
+  "stdout": "MERHABA DÜNYA ✓\nIKINCI SATIR",
+  "stderr": "2 lines"
+}

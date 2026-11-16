@@ -1,0 +1,10 @@
+{
+  "description": "Unhandled exception in a GUI launch: crash.log written, no blocking dialog",
+  "entry": "main.py",
+  "build": { "windowed": true },
+  "crashLog": "RuntimeError: deliberate failure ✓",
+  "os": {
+    "windows": { "exitCode": 1 },
+    "macos": { "launch": "open" }
+  }
+}

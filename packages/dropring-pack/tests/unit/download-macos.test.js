@@ -22,12 +22,12 @@ test('download: verifies, caches, re-fetches a tampered cache entry', async (t) 
   const srv = await serve(t, body);
   const dest = path.join(tmpdir(t), 'cache', 'f.tar.gz');
   let progress = 0;
-  assert.deepEqual(await download({ url: srv.url, dest, sha256, onProgress: (r) => { progress = r; } }), { path: dest, cached: false });
+  assert.deepEqual(await download({ url: srv.url, dest, sha256, env: {}, onProgress: (r) => { progress = r; } }), { path: dest, cached: false });
   assert.equal(progress, body.length);
-  assert.deepEqual(await download({ url: srv.url, dest, sha256 }), { path: dest, cached: true });
+  assert.deepEqual(await download({ url: srv.url, dest, sha256, env: {} }), { path: dest, cached: true });
   assert.equal(srv.hits(), 1);
   fs.writeFileSync(dest, 'tampered');
-  assert.equal((await download({ url: srv.url, dest, sha256 })).cached, false);
+  assert.equal((await download({ url: srv.url, dest, sha256, env: {} })).cached, false);
   assert.equal(srv.hits(), 2);
   assert.ok(fs.readFileSync(dest).equals(body));
 });
@@ -36,14 +36,14 @@ test('download: a hash mismatch leaves nothing behind', async (t) => {
   const srv = await serve(t, Buffer.from('evil'));
   const dir = tmpdir(t);
   const dest = path.join(dir, 'f.tar.gz');
-  await assert.rejects(download({ url: srv.url, dest, sha256: 'b'.repeat(64), retries: 1 }), { code: 'HASH_MISMATCH' });
+  await assert.rejects(download({ url: srv.url, dest, sha256: 'b'.repeat(64), retries: 1, env: {} }), { code: 'HASH_MISMATCH' });
   assert.deepEqual(fs.readdirSync(dir), []);
 });
 
 test('download: refuses plain HTTP to remote hosts, missing pins and offline fetches', async (t) => {
   const dest = path.join(tmpdir(t), 'x');
-  await assert.rejects(download({ url: 'http://example.com/x', dest, sha256: 'c'.repeat(64) }), /HTTPS required/);
-  await assert.rejects(download({ url: 'https://example.com/x', dest, sha256: 'nope' }), /no valid pinned SHA-256/);
+  await assert.rejects(download({ url: 'http://example.com/x', dest, sha256: 'c'.repeat(64), env: {} }), /HTTPS required/);
+  await assert.rejects(download({ url: 'https://example.com/x', dest, sha256: 'nope', env: {} }), /no valid pinned SHA-256/);
   await assert.rejects(download({ url: 'https://example.com/x', dest, sha256: 'c'.repeat(64), env: { DROPRING_PACK_OFFLINE: '1' } }), /offline mode/);
 });
 

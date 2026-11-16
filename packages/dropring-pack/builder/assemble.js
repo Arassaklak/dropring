@@ -13,21 +13,44 @@ const { runtimeLayout } = require('./runtime');
 const macos = require('./macos');
 const { walk, isInside, sanitizeFileName, setTreeTimes, reproducibleDate, throwIfAborted } = require('./util');
 const { hashTree, summarize } = require('./manifest');
+const { zipDirectory } = require('./zip');
 
 const PACK_VERSION = require('../package.json').version;
 const BOOT_DIR = path.join(__dirname, '..', 'boot');
 const MANIFEST_FILE = 'manifest.json';
 const CONFIG_FILE = 'dropring-pack.cfg';
 
+const TRANSLITERATE = { ı: 'i', İ: 'I', ß: 'ss', æ: 'ae', Æ: 'AE', ø: 'o', Ø: 'O', đ: 'd', Đ: 'D', ł: 'l', Ł: 'L', œ: 'oe', Œ: 'OE' };
+
+/**
+ * ASCII file name for the macOS main executable. codesign cannot seal a bundle whose
+ * CFBundleExecutable has non-ASCII characters ("a sealed resource is missing or invalid"),
+ * so "Ünïcode Äpp" runs as Contents/MacOS/Unicode App; bundle and display names stay Unicode.
+ */
+function asciiExecutableName(name) {
+  const s = [...name.normalize('NFKD')].map((c) => TRANSLITERATE[c] ?? c).join('')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\x20-\x7e]/g, '_')
+    .replace(/[<>:"/\\|?*]/g, '_');
+  const trimmed = s.replace(/^[\s._]+|[\s.]+$/g, '');
+  return /[A-Za-z0-9]/.test(trimmed) ? trimmed : 'App';
+}
+
 /** Paths inside an app for a target. */
 function layoutFor(target, fileName) {
   if (target.os === 'macos') {
-    return { bundleName: `${fileName}.app`, base: 'Contents/Resources', executable: `Contents/MacOS/${fileName}` };
+    return { bundleName: `${fileName}.app`, base: 'Contents/Resources', executable: `Contents/MacOS/${asciiExecutableName(fileName)}` };
   }
   return { bundleName: fileName, base: '_internal', executable: `${fileName}.exe` };
 }
 
 const join = (root, rel) => path.join(root, ...rel.split('/'));
+
+/** Permission bits for a path inside an app: folders, the launcher and native libraries are executable. */
+function modeFor(rel, type, executable) {
+  if (type === 'dir' || rel === executable || /\.(dylib|so|dll|pyd|exe)$/.test(rel)) return 0o755;
+  return 0o644;
+}
 
 /** Copies the runtime with the strip filter; returns dropped bytes per reason. */
 async function copyRuntime(src, dest, filter, warn) {
@@ -94,7 +117,12 @@ function launcherConfig({ target, runtime, layout, utf8Mode }) {
  * @param {string} o.runtimeRoot  extracted python/ folder in the cache
  * @param {{path: string, sha256: string, version: string, kind: string}} o.launcher
  * @param {Awaited<ReturnType<typeof import('./analyze').analyze>>} o.analysis
- * @param {{name: string, appId: string, version: string, windowed: boolean, utf8Mode: boolean}} o.app
+ * @param {{name: string, appId: string, version: string, windowed: boolean, utf8Mode: boolean,
+ *          company?: string, copyright?: string, description?: string, dpiAware?: boolean}} o.app
+ * @param {{ico: Buffer|null, icns: Buffer|null, sha256: string}|null} [o.icon]  prepared icon files
+ * @param {{from: string, to: string}[]} [o.includes]  extra data files (to = path inside app/)
+ * @param {string} [o.signCmd]    Windows: command template that signs the executable
+ * @param {boolean} [o.zip]       also write <name>-<version>-<target>.zip next to the app
  * @param {string} o.destDir      folder that receives the app
  * @param {'adhoc'|'none'} o.macSign
  * @param {(e: object) => void} o.emit
@@ -130,12 +158,15 @@ async function assembleOnedir(o) {
     if (files.pth) await fs.promises.writeFile(join(base, `python/${files.pth}`), `# dropring-pack: module search path of the embedded interpreter (implies isolated mode)\nLib\nDLLs\nimport site\n`);
     throwIfAborted(signal);
 
-    // 2. Application code
-    emit({ type: 'stage', stage: 'assemble', ...tag, message: `copying ${analysis.files.length} application file(s)` });
-    for (const rel of analysis.files) {
+    // 2. Application code and --include data files
+    const includes = o.includes || [];
+    emit({ type: 'stage', stage: 'assemble', ...tag, message: `copying ${analysis.files.length} application file(s)${includes.length ? ` and ${includes.length} included file(s)` : ''}` });
+    const copies = new Map(analysis.files.map((rel) => [rel, join(analysis.root, rel)]));
+    for (const inc of includes) copies.set(inc.to, inc.from); // an explicit include wins over a scanned file
+    for (const [rel, from] of copies) {
       const dest = join(base, `app/${rel}`);
       await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-      await fs.promises.copyFile(join(analysis.root, rel), dest);
+      await fs.promises.copyFile(from, dest);
     }
 
     // 3. Bootstrap, helper module, app info, launcher config
@@ -150,21 +181,32 @@ async function assembleOnedir(o) {
     await fs.promises.mkdir(path.dirname(exePath), { recursive: true });
     await fs.promises.copyFile(o.launcher.path, exePath);
 
-    // 5. Brand (M0: Info.plist; icons and PE version resources arrive in M1)
-    emit({ type: 'stage', stage: 'brand', ...tag, message: target.os === 'macos' ? 'writing Info.plist' : 'PE icon/version resources: planned for M1' });
+    // 5. Brand: icon, version info, manifest (Windows) / Info.plist and .icns (macOS)
     if (target.os === 'macos') {
+      emit({ type: 'stage', stage: 'brand', ...tag, message: `writing Info.plist${o.icon ? ' and AppIcon.icns' : ''}` });
       const libMin = await macos.machoMinOsOfFile(join(base, `python/${files.lib}`));
       const exeMin = await macos.machoMinOsOfFile(exePath);
       const minOs = [libMin, exeMin, target.arch === 'arm64' ? '11.0' : '10.13'].filter(Boolean).sort(macos.compareVersions).pop();
-      await fs.promises.writeFile(join(stage, 'Contents/Info.plist'), macos.infoPlist({ name: app.name, executable: fileName, appId: app.appId, version: app.version, minOs }));
+      const extra = {};
+      if (o.icon) {
+        await fs.promises.writeFile(join(base, 'AppIcon.icns'), o.icon.icns);
+        extra.CFBundleIconFile = 'AppIcon';
+      }
+      if (app.copyright) extra.NSHumanReadableCopyright = app.copyright;
+      await fs.promises.writeFile(join(stage, 'Contents/Info.plist'), macos.infoPlist({ name: app.name, executable: path.posix.basename(layout.executable), appId: app.appId, version: app.version, minOs, extra }));
       await fs.promises.writeFile(join(stage, 'Contents/PkgInfo'), 'APPL????');
+    } else {
+      emit({ type: 'stage', stage: 'brand', ...tag, message: `version info${o.icon ? ', icon' : ''}${app.dpiAware ? ', DPI-aware manifest' : ''}` });
+      await require('./windows').brandExe(exePath, {
+        name: app.name, version: app.version, exeName: path.basename(layout.executable), company: app.company,
+        copyright: app.copyright, description: app.description, ico: o.icon ? o.icon.ico : null, dpiAware: app.dpiAware,
+      });
     }
 
     // 6. Deterministic permissions: launcher and native libraries executable, the rest read-only data.
     for (const e of await walk(stage)) {
       if (e.type === 'symlink') continue;
-      const exec = e.type === 'dir' || e.rel === layout.executable || /\.(dylib|so|dll|pyd|exe)$/.test(e.rel);
-      await fs.promises.chmod(e.abs, exec ? 0o755 : 0o644);
+      await fs.promises.chmod(e.abs, modeFor(e.rel, e.type, layout.executable));
     }
 
     // 7. Manifest inside the app (provenance + every file's hash). The main executable is
@@ -178,7 +220,9 @@ async function assembleOnedir(o) {
       target: { id: target.id, os: target.os, arch: target.arch, triple: target.triple },
       python: { version: runtime.version, release: runtime.release, source: 'python-build-standalone', flavor: 'install_only_stripped', archiveSha256: runtime.sha256 },
       launcher: { version: o.launcher.version, kind: o.launcher.kind, sha256: o.launcher.sha256 },
-      analysis: { mode: analysis.mode, imports: analysis.imports, usesTkinter: analysis.usesTkinter },
+      branding: { icon: o.icon ? o.icon.sha256 : null, company: app.company || null, copyright: app.copyright || null, dpiAware: !!app.dpiAware },
+      analysis: { mode: analysis.mode, analyzer: analysis.analyzer, analyzerPython: analysis.analyzerPython, imports: analysis.imports, gui: analysis.gui, usesTkinter: analysis.usesTkinter },
+      includes: includes.map((i) => i.to),
       files: [],
       totals: null,
     };
@@ -197,8 +241,11 @@ async function assembleOnedir(o) {
         emit({ type: 'stage', stage: 'sign', ...tag, message: 'not sealed on this host' });
         warn('the .app bundle is not sealed on this host (rcodesign support arrives in M3); its Mach-O files keep their original ad-hoc signatures, which is enough to run on Apple Silicon');
       }
+    } else if (o.signCmd) {
+      emit({ type: 'stage', stage: 'sign', ...tag, message: `signing ${path.basename(exePath)} with --sign-cmd (command not shown)` });
+      await require('./sign').signFile(o.signCmd, exePath, { signal });
     } else {
-      emit({ type: 'stage', stage: 'sign', ...tag, message: 'unsigned (Authenticode via --sign-cmd arrives in M1)' });
+      emit({ type: 'stage', stage: 'sign', ...tag, message: 'unsigned (pass --sign-cmd to sign with your certificate)' });
     }
 
     // 9. Verify the structure the launcher relies on.
@@ -220,7 +267,13 @@ async function assembleOnedir(o) {
   const outer = { generator: 'dropring-pack', generatorVersion: PACK_VERSION, format: 1, artifact: layout.bundleName, target: target.id, executable: layout.executable, files: finalFiles, totals: summarize(finalFiles) };
   const manifestPath = `${finalPath}.manifest.json`;
   await fs.promises.writeFile(manifestPath, JSON.stringify(outer, null, 2) + '\n');
-  return { target: target.id, path: finalPath, executable: join(finalPath, layout.executable), manifestPath, sizeBytes: outer.totals.bytes, fileCount: outer.totals.count };
+  let zipPath = null;
+  if (o.zip) {
+    zipPath = path.join(o.destDir, `${fileName}-${app.version}-${target.id}.zip`);
+    emit({ type: 'stage', stage: 'zip', ...tag, message: path.basename(zipPath) });
+    await zipDirectory(finalPath, zipPath, { date: reproducibleDate(o.env), modeOf: (rel, type) => modeFor(rel, type, layout.executable) });
+  }
+  return { target: target.id, path: finalPath, executable: join(finalPath, layout.executable), manifestPath, zipPath, sizeBytes: outer.totals.bytes, fileCount: outer.totals.count };
 }
 
-module.exports = { assembleOnedir, launcherConfig, layoutFor, MANIFEST_FILE, CONFIG_FILE };
+module.exports = { assembleOnedir, launcherConfig, layoutFor, modeFor, asciiExecutableName, MANIFEST_FILE, CONFIG_FILE };

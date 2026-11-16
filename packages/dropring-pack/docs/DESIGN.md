@@ -1,6 +1,6 @@
 # dropring-pack — design
 
-Status: M0 (spike) · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/).
+Status: M1 · last reviewed 2026-11-16 · decisions are recorded as ADRs in [`adr/`](adr/) · progress and evidence in [STATUS.md](STATUS.md).
 
 ## 1. What it is
 
@@ -38,16 +38,20 @@ packages/dropring-pack/
 `analyze → resolve → fetch → assemble → brand → sign → verify`, each a reported stage
 (`{type:'stage'|'progress'|'warning'|'log'}` events, `AbortSignal` honoured between steps).
 
-1. **analyze** — entry file and project root; static import scan (M0: a conservative text scan
-   for tkinter only; M1: AST analysis executed by the *host* runtime with `-I`, never the user's
-   code). Declared dependencies (requirements, PEP 621/Poetry/uv/PDM, PEP 723) arrive in M2.
+1. **analyze** — entry file and project root; AST analysis (ADR-0008) run by a Python of the
+   *target's* version on the build host with `-I -S -B`: it parses, never imports. Required
+   third-party, removed or OS-missing modules and syntax errors stop the build with file:line;
+   optional ones are warnings. Declared dependencies (requirements, PEP 621/Poetry/uv/PDM,
+   PEP 723) arrive in M2.
 2. **resolve** — pick the runtime (`--python`, default 3.14) for every target; M2+: resolve
    distributions for each target's marker environment.
 3. **fetch** — runtimes (and later wheels/launchers) into the cache; refuse hash mismatches;
    `DROPRING_PACK_OFFLINE=1` uses the cache only.
 4. **assemble** — copy the stripped runtime, user code, bootstrap and launcher into the layout
    below; write the launcher config, `._pth` (Windows) and `Info.plist` (macOS).
-5. **brand** — (M1) icon, version info and manifest on the exe via `resedit`; `.icns` for macOS.
+5. **brand** — icon (PNG/ICO/ICNS, SVG via sharp) rendered by a dependency-free PNG/ICO/ICNS
+   toolkit; Windows version info, icon group and optional DPI-aware manifest via `resedit`;
+   macOS `AppIcon.icns` + Info.plist keys. `--include SRC=DEST` adds data files.
 6. **sign** — macOS: ad-hoc by default (`codesign` on macOS hosts, `rcodesign` elsewhere, M3);
    Windows: optional `--sign-cmd` template run *after* all PE edits (and after the onefile append).
 7. **verify** — structural checks; `manifest.json` (SBOM) with SHA-256 of every file, runtime and
@@ -116,8 +120,17 @@ embedded manifest declares `asInvoker`, `longPathAware`, the UTF-8 active code p
 OS GUIDs (DPI awareness is set by branding, M1).
 
 **macOS specifics:** the launcher is `Contents/MacOS/<App>`; everything else is in `Resources`
-and nothing is written into the bundle at runtime (`-B`). Every Mach-O is signed bottom-up
+and nothing is written into the bundle at runtime (`-B`). The executable's file name is ASCII
+(`Ünïcode Äpp` → `Unicode App`) because `codesign` cannot seal a bundle whose
+`CFBundleExecutable` is not ASCII; bundle, menu and Dock names keep the full name. The bootstrap
+points `TCL_LIBRARY`/`TK_LIBRARY` at the bundled Tcl/Tk. Every Mach-O is signed bottom-up
 (ad-hoc default); Developer ID + `notarytool` are opt-in (M3/M7).
+
+**Errors users can see:** in a GUI launch (windowed Windows app; macOS app started by
+launchd, i.e. Finder/Dock/`open`) an unhandled exception is saved to `crash.log` in the user
+data folder and shown in a native dialog (`MessageBoxW` / `CFUserNotificationDisplayAlert`); the
+launcher does the same for its own start-up errors. `DROPRING_PACK_NO_DIALOGS=1` suppresses the
+dialogs (CI, scripts).
 
 ## 6. Dependencies and cross-target wheels (M2/M3)
 

@@ -80,6 +80,64 @@ fn last_error() -> String {
 }
 
 pub fn report_error(_windowed: bool, message: &str) {
-    // M1: also show a native alert when not started from a terminal (Finder launch).
-    eprintln!("dropring-pack launcher {}: {message}", crate::VERSION);
+    let text = format!("dropring-pack launcher {}: {message}", crate::VERSION);
+    eprintln!("{text}");
+    #[cfg(target_os = "macos")]
+    if crate::dialogs_allowed() && alert::launched_by_launchd() {
+        alert::show("This application could not start", &text);
+    }
+}
+
+/// Native alert for apps started from Finder or the Dock, where stderr is invisible.
+#[cfg(target_os = "macos")]
+mod alert {
+    use std::ffi::{c_int, c_void};
+
+    type CFTypeRef = *const c_void;
+    const UTF8: u32 = 0x0800_0100; // kCFStringEncodingUTF8
+    const STOP_ALERT_LEVEL: usize = 0; // kCFUserNotificationStopAlertLevel
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFStringCreateWithBytes(alloc: CFTypeRef, bytes: *const u8, len: isize, encoding: u32, external: u8) -> CFTypeRef;
+        fn CFUserNotificationDisplayAlert(
+            timeout: f64, flags: usize, icon: CFTypeRef, sound: CFTypeRef, localization: CFTypeRef,
+            header: CFTypeRef, message: CFTypeRef, default_button: CFTypeRef, alternate_button: CFTypeRef,
+            other_button: CFTypeRef, response: *mut usize,
+        ) -> i32;
+        fn CFRelease(object: CFTypeRef);
+    }
+
+    unsafe extern "C" {
+        fn getppid() -> c_int;
+        fn isatty(fd: c_int) -> c_int;
+    }
+
+    /// True when launchd started us (double-click in Finder, Dock, `open`) and stderr is not a
+    /// terminal. A parent shell or script never gets a modal dialog that would block it.
+    pub fn launched_by_launchd() -> bool {
+        // SAFETY: getppid and isatty have no preconditions.
+        unsafe { getppid() == 1 && isatty(2) == 0 }
+    }
+
+    fn cf_string(s: &str) -> CFTypeRef {
+        // SAFETY: the bytes are valid UTF-8 for the given length; a null result is handled.
+        unsafe { CFStringCreateWithBytes(std::ptr::null(), s.as_ptr(), s.len() as isize, UTF8, 0) }
+    }
+
+    pub fn show(header: &str, message: &str) {
+        let header = cf_string(header);
+        let message = cf_string(message);
+        if header.is_null() || message.is_null() {
+            return;
+        }
+        let mut response = 0usize;
+        // SAFETY: valid CFStrings, null optional arguments, response points to a local. The call
+        // blocks until the user dismisses the alert (timeout 0 = no timeout).
+        unsafe {
+            CFUserNotificationDisplayAlert(0.0, STOP_ALERT_LEVEL, std::ptr::null(), std::ptr::null(), std::ptr::null(), header, message, std::ptr::null(), std::ptr::null(), std::ptr::null(), &mut response);
+            CFRelease(header);
+            CFRelease(message);
+        }
+    }
 }

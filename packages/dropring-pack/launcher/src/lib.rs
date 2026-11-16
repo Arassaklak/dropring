@@ -40,6 +40,15 @@ pub const SAVED_ENV_VAR: &str = "DROPRING_PACK_SAVED_ENV";
 /// Exit status when the launcher fails before Python runs.
 const EXIT_LAUNCHER_ERROR: i32 = 1;
 
+/// Set (to any value) to suppress error dialogs, e.g. in CI or scripted runs. The bootstrap
+/// honours the same variable for crash dialogs of the Python application.
+pub const NO_DIALOGS_VAR: &str = "DROPRING_PACK_NO_DIALOGS";
+
+/// False when the user or a test harness asked for no modal dialogs.
+pub fn dialogs_allowed() -> bool {
+    std::env::var_os(NO_DIALOGS_VAR).is_none()
+}
+
 /// Everything the platform layer needs to start the interpreter.
 pub struct Launch {
     /// Absolute path of this executable; becomes `sys.executable`.

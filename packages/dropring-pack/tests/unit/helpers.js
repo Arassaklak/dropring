@@ -5,6 +5,23 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// Unit tests never touch the user's cache or the network.
+process.env.DROPRING_PACK_CACHE = fs.mkdtempSync(path.join(os.tmpdir(), 'dropring-pack-test-cache-'));
+process.env.DROPRING_PACK_OFFLINE = '1';
+process.on('exit', () => fs.rmSync(process.env.DROPRING_PACK_CACHE, { recursive: true, force: true }));
+
+/** A minimal but real PE executable with an application manifest, standing in for the launcher. */
+async function fakePeLauncher(file) {
+  const ResEdit = await import('resedit');
+  const exe = ResEdit.NtExecutable.createEmpty(false, false);
+  const res = ResEdit.NtExecutableResource.from(exe);
+  const manifest = '<?xml version="1.0" encoding="UTF-8"?><assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><application xmlns="urn:schemas-microsoft-com:asm.v3"><windowsSettings><longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware></windowsSettings></application></assembly>';
+  res.entries.push({ type: 24, id: 1, lang: 1033, codepage: 0, bin: new Uint8Array(Buffer.from(manifest)).buffer });
+  res.outputResource(exe);
+  fs.writeFileSync(file, Buffer.from(exe.generate()));
+  return file;
+}
+
 function tmpdir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dropring-pack-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -43,4 +60,14 @@ function fakeRuntime(root, os_) {
 
 const RUNTIME_SPEC = { minor: '3.14', version: '3.14.10', release: '20261110', triple: 'x', sha256: 'a'.repeat(64), url: 'https://example.invalid/x.tar.gz', filename: 'x.tar.gz', endOfLife: false };
 
-module.exports = { tmpdir, writeFiles, fakeRuntime, RUNTIME_SPEC };
+/** A python3 on PATH for running the AST analyzer in tests, or null (those tests are skipped). */
+function systemPython() {
+  const { spawnSync } = require('child_process');
+  for (const cmd of process.platform === 'win32' ? ['python', 'py'] : ['python3']) {
+    const r = spawnSync(cmd, ['-c', 'import sys; print(sys.version_info >= (3, 10))'], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout.trim() === 'True') return cmd;
+  }
+  return null;
+}
+
+module.exports = { tmpdir, writeFiles, fakeRuntime, fakePeLauncher, systemPython, RUNTIME_SPEC };

@@ -1,6 +1,7 @@
 # dropring-pack (packages/dropring-pack): builds the native launcher for every target, packages
-# the test fixtures as real apps and runs them on Windows x64/ARM64 and macOS Apple Silicon/Intel
-# runners — apps built on the runner itself and apps cross-assembled on a Linux runner.
+# the test fixtures as real (branded) apps and runs them on Windows x64/ARM64 and macOS Apple
+# Silicon/Intel runners — apps built on the runner itself, and apps cross-assembled on a Linux
+# runner, shipped as zips and unzipped with each OS's own tool.
 name: dropring-pack
 
 on:
@@ -21,6 +22,8 @@ concurrency:
 env:
   RUST_TOOLCHAIN: '1.99.0'
   NODE_VERSION: '22'
+  # Never block a job on an error dialog of a test app.
+  DROPRING_PACK_NO_DIALOGS: '1'
 
 jobs:
   unit:
@@ -31,8 +34,8 @@ jobs:
         shell: bash
         working-directory: packages/dropring-pack
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - run: npm ci
       - run: npm test
@@ -55,8 +58,8 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - name: Install Rust ${{ env.RUST_TOOLCHAIN }}
         run: |
@@ -98,7 +101,7 @@ jobs:
             console.log(JSON.stringify(meta, null, 2));
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### launcher ' + meta.target + '\n\n' + files.map((f) => '- ' + f + ': ' + meta.files[f].size + ' bytes, sha256 ' + meta.files[f].sha256).join('\n') + '\n');
           " "$out" "$(rustc --version)"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: launcher-${{ matrix.target }}
           path: packages/dropring-pack/dist-launchers/${{ matrix.target }}
@@ -125,11 +128,11 @@ jobs:
         shell: bash
         working-directory: packages/dropring-pack
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - run: npm ci
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: launcher-${{ matrix.target }}
           path: packages/dropring-pack/dist-launchers/${{ matrix.target }}
@@ -145,22 +148,22 @@ jobs:
         shell: bash
         working-directory: packages/dropring-pack
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - run: npm ci
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: launcher-*
           path: packages/dropring-pack/dist-launchers
       - name: Arrange launchers by target
         run: for d in dist-launchers/launcher-*; do mv "$d" "dist-launchers/${d#dist-launchers/launcher-}"; done && ls -R dist-launchers
-      - name: Build fixtures for all targets
+      - name: Build fixtures for all targets (zipped)
         run: node tests/ci.js cross-build --targets win-x64,win-arm64,mac-arm64,mac-x64 --launcher-dir dist-launchers --out cross
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cross-apps
-          path: packages/dropring-pack/cross/*.tar
+          path: packages/dropring-pack/cross/*/*.zip
           if-no-files-found: error
 
   cross-run:
@@ -180,16 +183,13 @@ jobs:
         shell: bash
         working-directory: packages/dropring-pack
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - run: npm ci
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: cross-apps
           path: packages/dropring-pack/cross
-      - name: Run fixtures
-        run: |
-          mkdir -p "apps/${{ matrix.target }}"
-          tar -xf "cross/${{ matrix.target }}.tar" -C "apps/${{ matrix.target }}"
-          node tests/ci.js run --target ${{ matrix.target }} --apps "apps/${{ matrix.target }}"
+      - name: Unzip and run fixtures
+        run: node tests/ci.js run --target ${{ matrix.target }} --zips "cross/${{ matrix.target }}"

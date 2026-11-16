@@ -1,6 +1,6 @@
 {
   "name": "dropring-pack",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn a Python script or project into a standalone Windows .exe or macOS .app, from any host, without PyInstaller",
   "license": "MIT",
   "private": true,
@@ -24,6 +24,10 @@
     "launcher:build": "cd launcher && cargo build --release --locked"
   },
   "dependencies": {
+    "resedit": "3.1.0",
     "tar": "7.5.22"
+  },
+  "overrides": {
+    "pe-library": "2.0.1"
   }
 }

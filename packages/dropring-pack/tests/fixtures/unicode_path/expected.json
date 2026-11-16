@@ -1,0 +1,18 @@
+{
+  "description": "Non-ASCII app name, app moved into a folder with spaces and non-ASCII characters, data file added with --include",
+  "entry": "main.py",
+  "build": { "name": "Ünïcode Äpp", "include": ["veri=veri"] },
+  "relocate": "yol ğüşiöç ✓/iç içe",
+  "args": ["ç ✓", "日本"],
+  "exitCode": 0,
+  "stdoutJson": {
+    "data": "Merhaba dünya ✓ — 日本語",
+    "exe_stem": "Ünïcode Äpp",
+    "exe_in_relocated_folder": true,
+    "argv": ["ç ✓", "日本"]
+  },
+  "os": {
+    "macos": { "stdoutJson": { "exe_stem": "Unicode App" } }
+  },
+  "note": "On macOS the executable inside Contents/MacOS is ASCII (codesign cannot seal a non-ASCII CFBundleExecutable); the bundle keeps its Unicode name"
+}
