@@ -110,11 +110,11 @@ function unzip(zip, dest) {
   fs.mkdirSync(dest, { recursive: true });
   if (process.platform === 'darwin') execFileSync('/usr/bin/ditto', ['-x', '-k', zip, dest]);
   else if (process.platform === 'win32') {
-    // Windows 10+ ships bsdtar as System32\tar.exe; it reads zips (UTF-8 names) and is much
-    // faster than PowerShell's Expand-Archive, which took minutes for six ~800-file apps.
-    const tarExe = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
-    if (fs.existsSync(tarExe)) execFileSync(tarExe, ['-xf', zip, '-C', dest]);
-    else execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:DRP_ZIP -DestinationPath $env:DRP_DEST -Force'], { env: { ...process.env, DRP_ZIP: zip, DRP_DEST: dest } });
+    // .NET's ZipFile honours the zip UTF-8 name flag and is fast. Not System32\tar.exe: it
+    // converts names to the ANSI code page and skips entries like "içerik ✓.txt" ("empty or
+    // unreadable filename"). Not Expand-Archive: it took minutes for six ~800-file apps.
+    const ps = 'Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory($env:DRP_ZIP, $env:DRP_DEST)';
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { env: { ...process.env, DRP_ZIP: zip, DRP_DEST: dest } });
   } else execFileSync('unzip', ['-q', zip, '-d', dest]);
   const entries = fs.readdirSync(dest);
   if (entries.length !== 1) throw new Error(`${zip} should contain exactly one app folder, found ${entries.join(', ')}`);
