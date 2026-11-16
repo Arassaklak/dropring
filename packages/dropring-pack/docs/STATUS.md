@@ -2,7 +2,11 @@
 
 ## M0 — spike (2026-11-16)
 
-Machine: macOS 26.6.2 arm64 (Apple Silicon), Node 26.5.0, Rust 1.99.0, Apple clang 21.
+**Acceptance met:** the hello-world app runs on real Windows x64, Windows ARM64, macOS Apple
+Silicon and macOS Intel runners, both when built on that runner and when assembled on Linux
+(CI run 43836997444, below).
+
+Local machine: macOS 26.6.2 arm64 (Apple Silicon), Node 26.5.0, Rust 1.99.0, Apple clang 21.
 
 ### Verified locally (commands run, results observed)
 
@@ -26,14 +30,51 @@ Machine: macOS 26.6.2 arm64 (Apple Silicon), Node 26.5.0, Rust 1.99.0, Apple cla
 | Startup (hello, arm64) | warm median 46–60 ms; first launch of a new build 0.6–1.1 s (macOS first-run checks). Rosetta: first 2.4–2.8 s, median 93–114 ms |
 | Build time | first build 42 s (25.7 MB runtime download); cached rebuild 0.62 s incl. signing |
 
-### Not verified yet — needs the CI workflow
+### Verified in CI — run [43836997444](https://github.com/Arassaklak/dropring/actions/runs/43836997444) (commit `977d400`)
 
-Pushing `dropring-pack/m0` runs `.github/workflows/dropring-pack.yml`:
+All 18 jobs passed in 2.5 minutes: unit tests, 4 launcher builds, 8 native fixture jobs,
+the Linux cross-build and 4 runs of Linux-built apps. Every job runs both fixtures; a job fails
+if any check in `expected.json` differs (see `tests/ci.js`).
 
-- Windows x64 and ARM64: launcher build with embedded manifest and static CRT, `._pth` + `-I`
-  isolation, `Py_Main` embedding, the fixtures for Python 3.10/3.14/3.15.
-- A real Intel Mac (`macos-15-intel`) instead of Rosetta.
-- Apps cross-assembled on Linux for all four targets, run on the matching runners.
+| Fixture runs (first / median of 5, ms) | hello | args_exit_code | size MB | files |
+|---|---|---|---|---|
+| win-x64 py3.14 (windows-latest) | 164 / 147 | 145 / 130 | 34.7 | 778 |
+| win-x64 py3.10 | 196 / 175 | 127 / 117 | 26.9 | 839 |
+| win-x64 py3.15 | 158 / 136 | 259 / 106 | 37.3 | 842 |
+| win-arm64 py3.14 (windows-11-arm) | 334 / 161 | 248 / 123 | 35.6 | 778 |
+| mac-arm64 py3.14 (macos-15) | 168 / 167 | 105 / 105 | 29.0 | 585 |
+| mac-arm64 py3.10 | 113 / 108 | 105 / 94 | 25.4 | 661 |
+| mac-arm64 py3.15 | 181 / 180 | 183 / 133 | 31.1 | 641 |
+| mac-x64 py3.14 (macos-15-intel) | 706 / 364 | 1277 / 314 | 29.6 | 582 |
+| Linux-built → win-x64 | 201 / 177 | 141 / 140 | 34.7 | 778 |
+| Linux-built → win-arm64 | 500 / 153 | 219 / 118 | 35.6 | 778 |
+| Linux-built → mac-arm64 | 169 / 131 | 118 / 95 | 28.8 | 584 |
+| Linux-built → mac-x64 | 304 / 302 | 285 / 252 | 29.5 | 581 |
+
+Launchers built in CI (Rust 1.99.0):
+
+| Target | console | windowed | checked |
+|---|---|---|---|
+| win-x64 | 245,760 B | 243,712 B | PE machine 0x8664, subsystem 3 / 2, manifest embedded, `/Brepro` timestamp |
+| win-arm64 | 239,616 B | 238,080 B | PE machine 0xaa64, subsystem 3 / 2, manifest embedded |
+| mac-arm64 | 303,296 B | 303,296 B | ad-hoc linker-signed |
+| mac-x64 | 296,688 B | 296,688 B | |
+
+What this proves beyond the Mac: `Py_Main` embedding, `._pth` + `-I` isolation and the static-CRT
+launcher work on Windows x64 and ARM64 for Python 3.10, 3.14 and 3.15; a real Intel Mac runs the
+x64 build; and an app assembled on Linux runs unchanged on all four targets (macOS bundles
+unsealed, relying on the Mach-O files' own ad-hoc signatures).
+
+### Observations
+
+- The launcher binary is not byte-identical between a local Mac build and the CI build (different
+  Apple SDK/linker versions; e.g. mac-x64 296,920 B locally vs 296,688 B in CI). App assembly is
+  reproducible for identical inputs; a reproducible launcher build (pinned runner image, check that
+  two CI builds match) is part of M7.
+- GitHub warns that the pinned `actions/*@v4` actions target the deprecated Node 20 runtime; move
+  to their Node 24 majors (also applies to the existing `build.yml`).
+- Start-up on GitHub's runners (100–360 ms warm) is slower than on a local Apple Silicon Mac
+  (46–60 ms); compare like with like when measuring against PyInstaller (M7).
 
 ### Known gaps (planned)
 
